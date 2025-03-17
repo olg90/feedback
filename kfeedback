@@ -103,9 +103,7 @@ pr=0.2
 M=100
 c=0.001
 
-ktype=0
-
-tauv=1
+tauv=100000
 vth=0.2
 
 tauz=0.1
@@ -120,11 +118,9 @@ delta_t = 0.01
 tmax = 100 # <-------------- TMAX
 navgs=1
 
-ktype='n'
-
-flist = np.linspace(0, 100, 100)
-
 # =============================================================================
+# flist = np.linspace(0, 100, 100)
+# ktype='n'
 # plt.plot(flist, 1/tlist, color='blue')
 # plt.ylabel('Firing rate', color='blue')
 # plt.xlabel('Input frequency')
@@ -138,6 +134,8 @@ flist = np.linspace(0, 100, 100)
 #     plt.plot(100*np.ones(len(flist)), np.linspace(0,np.max(1/tlist),len(flist)))
 #     plt.plot(flist, flist, color='k')
 # =============================================================================
+
+flist = np.linspace(0, 100, 100)
 
 ktype='n'
 tlist_n, cvlist_n = get_data(ktype, flist)
