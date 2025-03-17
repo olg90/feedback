@@ -1,0 +1,170 @@
+#%%
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+
+def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, c, kz, ktype):
+
+    tavgs=[]
+    cavgs=[]
+
+    for _ in range(navgs):
+
+        nlist=[]
+        vlist=[]
+        vthlist=[]
+        zlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k(z, ktype)*(M-n) + 1e-6)) # site gets occupied
+            t2 = timer
+
+            if t0 < t1 and t0 < t2: # AP occurrs
+                b = binomial(n, pr)
+                n-=b
+                z=z+cz*b
+                v = v + c*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+
+            elif t1<t0 and t1<t2: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+
+            else:
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    nlist.append(n)
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    zlist.append(z)
+                    tlist.append(tcurr)
+
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+
+            # Update the continuous dynamics
+
+            v = v + (-v/tauv + kz*z) * tmin
+            z = z + (-z/tauz) * tmin
+
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        FFn=np.var(nlist)/np.mean(nlist)
+        FFv=np.var(vlist)/np.mean(vlist)
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    return tlist, nlist, vlist, zlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv
+
+def k(z, ktype):
+    if ktype == 'n':
+        kbar=10
+        k1=3
+        return kbar/(1+k1*z)
+    if ktype == 'p':
+        kbar=25
+        k1=0.01
+        kb=7
+        return kb+(kbar-kb)*k1*z/(1+k1*z)
+
+def get_data(ktype, flist):
+    tlist=np.zeros_like(flist)
+    cvlist=np.zeros_like(flist)
+    for i,f in enumerate(flist):
+        print(i/len(flist))
+        res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, c, kz, ktype)
+        tlist[i]=res[7]
+        cvlist[i]=res[8]
+    return tlist, cvlist
+
+
+f=20
+pr=0.2
+M=100
+c=0.001
+
+ktype=0
+
+tauv=1
+vth=0.2
+
+tauz=0.1
+cz=10
+kz=0.01
+
+n=0 # occupied states
+v=0
+z=0
+
+delta_t = 0.01
+tmax = 100 # <-------------- TMAX
+navgs=1
+
+ktype='n'
+
+flist = np.linspace(0, 100, 100)
+
+# =============================================================================
+# plt.plot(flist, 1/tlist, color='blue')
+# plt.ylabel('Firing rate', color='blue')
+# plt.xlabel('Input frequency')
+# plt.tick_params(axis='y', labelcolor='blue')
+# plt.gca().twinx()
+# plt.plot(flist, cvlist, color='red')
+# plt.ylabel('CV^2', color='red')
+# plt.tick_params(axis='y', labelcolor='red')
+# 
+# if (flist<1/tlist).any():
+#     plt.plot(100*np.ones(len(flist)), np.linspace(0,np.max(1/tlist),len(flist)))
+#     plt.plot(flist, flist, color='k')
+# =============================================================================
+
+ktype='n'
+tlist_n, cvlist_n = get_data(ktype, flist)
+ktype='p'
+tlist_p, cvlist_p = get_data(ktype, flist)
+
+fig, axs = plt.subplots(2, 2)
+
+axs[0, 0].plot(flist, 1/tlist_n, color='blue')
+axs[0, 0].set_ylabel('Firing rate')
+axs[0, 0].set_xlabel('Input frequency')
+axs[0, 0].tick_params(axis='y')
+axs[0,0].set_title('Negative feedback')
+
+axs[1, 0].plot(flist, cvlist_n, color='red')
+axs[1, 0].set_ylabel('CV^2')
+axs[1, 0].set_xlabel('Input frequency')
+axs[1, 0].tick_params(axis='y')
+
+axs[0, 1].plot(flist, 1/tlist_p, color='blue')
+axs[0, 1].set_xlabel('Input frequency')
+axs[0, 1].tick_params(axis='y')
+axs[0, 1].set_title('Positive feedback')
+
+axs[1, 1].plot(flist, cvlist_p, color='red')
+axs[1, 1].set_xlabel('Input frequency')
+axs[1, 1].tick_params(axis='y')
+
+plt.tight_layout()
+plt.show()
