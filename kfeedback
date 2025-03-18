@@ -11,6 +11,7 @@ def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, ktyp
 
     tavgs=[]
     cavgs=[]
+    bavgs=[]
 
     for _ in range(navgs):
 
@@ -21,6 +22,7 @@ def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, ktyp
         tlist=[]
         prelist=[]
         postlist=[]
+        blist=[]
 
         tcurr=0
         ratio = 0.3
@@ -32,6 +34,7 @@ def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, ktyp
 
             if t0 < t1 and t0 < t2: # AP occurrs
                 b = binomial(n, pr)
+                blist.append(b)
                 n-=b
                 z=z+cz*b
                 tmin = t0
@@ -71,9 +74,13 @@ def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, ktyp
         
         tavgs.append(Tmean)
         cavgs.append(CVT2)
+        bavgs.append(np.mean(blist))
     Tmean = np.mean(tavgs)
     CVT2 = np.mean(cavgs)
-    return tlist, nlist, vlist, zlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv
+    
+    bavgs = np.mean(bavgs)
+    
+    return tlist, nlist, vlist, zlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, bavgs
 
 def k(z, ktype):
     if ktype == 'n':
@@ -83,30 +90,33 @@ def k(z, ktype):
     if ktype == 'p':
         kbar=1
         k1=0.5
-        kb=10
+        kb=8
         return kb+(kbar-kb)*k1*z/(1+k1*z)
+    if ktype == 0:
+        return 8
 
-def get_data(ktype, flist):
+def get_data(ktype, flist, tauv):
     tlist=np.zeros_like(flist)
     cvlist=np.zeros_like(flist)
+    bavgs = np.zeros_like(flist)
     for i,f in enumerate(flist):
         print(i/len(flist))
         res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, ktype)
         tlist[i]=res[7]
         cvlist[i]=res[8]
-    return tlist, cvlist
-
+        bavgs[i]=res[11]
+    return tlist, cvlist, bavgs
 
 f=20
 pr=0.2
 M=100
 
-tauv=1
+tauv=0.03 # 0.05
 vth=0.2
 
-tauz=0.1
+tauz=0.01
 cz=10
-kz=0.05
+kz=0.2
 
 n=0 # occupied states
 v=0
@@ -114,7 +124,49 @@ z=0
 
 delta_t = 0.01
 tmax = 100 # <-------------- TMAX
-navgs=1
+navgs = 100
+
+flist = np.linspace(0, 1000, 100)
+
+# =============================================================================
+# res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, 0)
+# plt.plot(res[0], res[2])
+# #%%
+# =============================================================================
+
+ktype = 'n'
+tlist_n, cvlist_n, bavgn = get_data(ktype, flist, tauv)
+print()
+ktype = 'p'
+tlist_p, cvlist_p, bavgp = get_data(ktype, flist, tauv)
+
+ktype = 0
+tlist_0, cvlist_0, bavg0 = get_data(ktype, flist, tauv)
+
+fig, ax = plt.subplots(1, 3, figsize=(10, 3))
+
+# Tmean plots
+ax[0].plot(flist, 1/tlist_n, color='blue', label='Negative feedback')
+ax[0].plot(flist, 1/tlist_p, color='red', label='Positive feedback')
+ax[0].plot(flist, 1/tlist_0, color='black', label='No feedback')
+ax[0].legend()
+
+# CV^2 plots
+ax[1].plot(flist, cvlist_n, color='blue', label='Negative feedback')
+ax[1].plot(flist, cvlist_p, color='red', label='Positive feedback')
+ax[1].plot(flist, cvlist_0, color='black', label='No feedback')
+ax[1].legend()
+
+# bavgs plots
+ax[2].plot(flist, bavgn, color='blue', label='Negative feedback')
+ax[2].plot(flist, bavgp, color='red', label='Positive feedback')
+ax[2].plot(flist, bavg0, color='black', label='No feedback')
+ax[2].legend()
+
+plt.tight_layout()
+plt.show()
+
+#%%
 
 # =============================================================================
 # flist = np.linspace(0, 100, 100)
@@ -133,34 +185,58 @@ navgs=1
 #     plt.plot(flist, flist, color='k')
 # =============================================================================
 
-flist = np.linspace(0, 100, 100)
 
-ktype='n'
-tlist_n, cvlist_n = get_data(ktype, flist)
-ktype='p'
-tlist_p, cvlist_p = get_data(ktype, flist)
+# =============================================================================
+# fig, axs = plt.subplots(2, 2)
+# 
+# axs[0, 0].plot(flist, 1/tlist_n, color='blue')
+# axs[0, 0].set_ylabel('Firing rate')
+# axs[0, 0].set_xlabel('Input frequency')
+# axs[0, 0].tick_params(axis='y')
+# axs[0,0].set_title('Negative feedback')
+# 
+# axs[1, 0].plot(flist, cvlist_n, color='red')
+# axs[1, 0].set_ylabel('CV^2')
+# axs[1, 0].set_xlabel('Input frequency')
+# axs[1, 0].tick_params(axis='y')
+# 
+# axs[0, 1].plot(flist, 1/tlist_p, color='blue')
+# axs[0, 1].set_xlabel('Input frequency')
+# axs[0, 1].tick_params(axis='y')
+# axs[0, 1].set_title('Positive feedback')
+# 
+# axs[1, 1].plot(flist, cvlist_p, color='red')
+# axs[1, 1].set_xlabel('Input frequency')
+# axs[1, 1].tick_params(axis='y')
+# 
+# plt.tight_layout()
+# plt.show()
+# =============================================================================
 
-fig, axs = plt.subplots(2, 2)
+# =============================================================================
+# fig, ax = plt.subplots(1, 4, figsize=(12,2.5))
+# 
+# ax[0].plot(flist, 1/tlist_n, color='blue')
+# ax[1].plot(flist, cvlist_n, color='red')
+# ax[2].plot(flist, 1/tlist_p, color='blue')
+# ax[3].plot(flist, cvlist_p, color='red')
+# 
+# plt.tight_layout()
+# plt.show()
+# 
+# =============================================================================
 
-axs[0, 0].plot(flist, 1/tlist_n, color='blue')
-axs[0, 0].set_ylabel('Firing rate')
-axs[0, 0].set_xlabel('Input frequency')
-axs[0, 0].tick_params(axis='y')
-axs[0,0].set_title('Negative feedback')
-
-axs[1, 0].plot(flist, cvlist_n, color='red')
-axs[1, 0].set_ylabel('CV^2')
-axs[1, 0].set_xlabel('Input frequency')
-axs[1, 0].tick_params(axis='y')
-
-axs[0, 1].plot(flist, 1/tlist_p, color='blue')
-axs[0, 1].set_xlabel('Input frequency')
-axs[0, 1].tick_params(axis='y')
-axs[0, 1].set_title('Positive feedback')
-
-axs[1, 1].plot(flist, cvlist_p, color='red')
-axs[1, 1].set_xlabel('Input frequency')
-axs[1, 1].tick_params(axis='y')
-
-plt.tight_layout()
-plt.show()
+# =============================================================================
+# fig, ax = plt.subplots(2, 1, figsize=(6, 5))
+# 
+# ax[0].plot(flist, 1/tlist_n, color='blue', label='Negative feedback')
+# ax[0].plot(flist, 1/tlist_p, color='black', label='Positive feedback')
+# ax[0].legend()
+# 
+# ax[1].plot(flist, cvlist_n, color='red', label='Negative feedback')
+# ax[1].plot(flist, cvlist_p, color='black', label='Positive feedback')
+# ax[1].legend()
+# 
+# plt.tight_layout()
+# plt.show()
+# =============================================================================
