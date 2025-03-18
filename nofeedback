@@ -80,9 +80,8 @@ def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz):
     bavgs = np.mean(bavgs)
     
     return tlist, nlist, vlist, zlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, bavgs
-
     
-def get_data(prtype, flist, tauv):
+def get_data(flist, tauv):
     tlist=np.zeros_like(flist)
     cvlist=np.zeros_like(flist)
     bavgs = np.zeros_like(flist)
@@ -111,20 +110,19 @@ v=0
 z=0
 
 delta_t = 0.01
-tmax = 30 # <-------------- TMAX
+tmax = 10#30 # <-------------- TMAX
 navgs=1
 
 flist = np.linspace(0, 200, 100)
 
 # =============================================================================
-# res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, 0)
-# plt.plot(res[0], res[2])
+# res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz)
+# plt.plot(res[0], res[3])
 # #%%
+# 
 # =============================================================================
 
-
-prtype = 0
-tlist_0, cvlist_0, bavg0 = get_data(prtype, flist, tauv)
+tlist_0, cvlist_0, bavg0 = get_data(flist, tauv)
 
 fig, ax = plt.subplots(1, 3, figsize=(10, 3))
 
