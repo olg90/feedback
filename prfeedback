@@ -1,0 +1,244 @@
+#%%
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+
+def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype):
+
+    tavgs=[]
+    cavgs=[]
+    bavgs=[]
+
+    for _ in range(navgs):
+
+        nlist=[]
+        vlist=[]
+        vthlist=[]
+        zlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+        blist=[]
+
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = timer
+
+            if t0 < t1 and t0 < t2: # AP occurrs
+                b = binomial(n, np.min([pr(z,prtype),1]))
+                blist.append(b)
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+
+            elif t1<t0 and t1<t2: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+
+            else:
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    nlist.append(n)
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    zlist.append(z)
+                    tlist.append(tcurr)
+
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+
+            # Update the continuous dynamics
+
+            v = v + (-v/tauv + kz*z) * tmin
+            z = z + (-z/tauz) * tmin
+
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        FFn=np.var(nlist)/np.mean(nlist)
+        FFv=np.var(vlist)/np.mean(vlist)
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+        bavgs.append(np.mean(blist))
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    
+    bavgs = np.mean(bavgs)
+    
+    return tlist, nlist, vlist, zlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, bavgs
+
+def pr(z, prtype):
+    if prtype == 'n':
+        prbar=0.3
+        pr1=0.005
+        return prbar/(1+pr1*z)
+    if prtype == 'p':
+        prbar=1
+        pr1=0.001
+        prb=0.3
+        return prb+(prbar-prb)*pr1*z/(1+pr1*z)
+    if prtype == 0:
+        return 0.3
+
+def get_data(prtype, flist, tauv):
+    tlist=np.zeros_like(flist)
+    cvlist=np.zeros_like(flist)
+    bavgs = np.zeros_like(flist)
+    for i,f in enumerate(flist):
+        print(i/len(flist))
+        res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype)
+        tlist[i]=res[7]
+        cvlist[i]=res[8]
+        bavgs[i]=res[11]
+    return tlist, cvlist, bavgs
+
+f=20
+M=100
+k=10
+
+tauv=0.015
+vth=0.2
+
+tauz=0.01
+cz=10
+kz=0.1
+
+n=0 # occupied states
+v=0
+z=0
+
+delta_t = 0.01
+tmax = 30 # <-------------- TMAX
+navgs=1
+
+flist = np.linspace(0, 200, 100)
+
+# =============================================================================
+# res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, 0)
+# plt.plot(res[0], res[2])
+# #%%
+# =============================================================================
+
+prtype = 'n'
+tlist_n, cvlist_n, bavgn = get_data(prtype, flist, tauv)
+print()
+prtype = 'p'
+tlist_p, cvlist_p, bavgp = get_data(prtype, flist, tauv)
+
+prtype = 0
+tlist_0, cvlist_0, bavg0 = get_data(prtype, flist, tauv)
+
+fig, ax = plt.subplots(1, 3, figsize=(10, 3))
+
+# Tmean plots
+ax[0].plot(flist, 1/tlist_n, color='blue', label='Negative feedback')
+ax[0].plot(flist, 1/tlist_p, color='red', label='Positive feedback')
+ax[0].plot(flist, 1/tlist_0, color='black', label='No feedback')
+ax[0].legend()
+
+# CV^2 plots
+ax[1].plot(flist, cvlist_n, color='blue', label='Negative feedback')
+ax[1].plot(flist, cvlist_p, color='red', label='Positive feedback')
+ax[1].plot(flist, cvlist_0, color='black', label='No feedback')
+ax[1].legend()
+
+# bavgs plots
+ax[2].plot(flist, bavgn, color='blue', label='Negative feedback')
+ax[2].plot(flist, bavgp, color='red', label='Positive feedback')
+ax[2].plot(flist, bavg0, color='black', label='No feedback')
+ax[2].legend()
+
+plt.tight_layout()
+plt.show()
+
+
+
+#%%
+
+# =============================================================================
+# flist = np.linspace(0, 100, 100)
+# prtype='n'
+# plt.plot(flist, 1/tlist, color='blue')
+# plt.ylabel('Firing rate', color='blue')
+# plt.xlabel('Input frequency')
+# plt.tick_params(axis='y', labelcolor='blue')
+# plt.gca().twinx()
+# plt.plot(flist, cvlist, color='red')
+# plt.ylabel('CV^2', color='red')
+# plt.tick_params(axis='y', labelcolor='red')
+# 
+# if (flist<1/tlist).any():
+#     plt.plot(100*np.ones(len(flist)), np.linspace(0,np.max(1/tlist),len(flist)))
+#     plt.plot(flist, flist, color='k')
+# =============================================================================
+
+
+# =============================================================================
+# fig, axs = plt.subplots(2, 2)
+# 
+# axs[0, 0].plot(flist, 1/tlist_n, color='blue')
+# axs[0, 0].set_ylabel('Firing rate')
+# axs[0, 0].set_xlabel('Input frequency')
+# axs[0, 0].tick_params(axis='y')
+# axs[0,0].set_title('Negative feedback')
+# 
+# axs[1, 0].plot(flist, cvlist_n, color='red')
+# axs[1, 0].set_ylabel('CV^2')
+# axs[1, 0].set_xlabel('Input frequency')
+# axs[1, 0].tick_params(axis='y')
+# 
+# axs[0, 1].plot(flist, 1/tlist_p, color='blue')
+# axs[0, 1].set_xlabel('Input frequency')
+# axs[0, 1].tick_params(axis='y')
+# axs[0, 1].set_title('Positive feedback')
+# 
+# axs[1, 1].plot(flist, cvlist_p, color='red')
+# axs[1, 1].set_xlabel('Input frequency')
+# axs[1, 1].tick_params(axis='y')
+# 
+# plt.tight_layout()
+# plt.show()
+# =============================================================================
+
+# =============================================================================
+# fig, ax = plt.subplots(1, 4, figsize=(12,2.5))
+# 
+# ax[0].plot(flist, 1/tlist_n, color='blue')
+# ax[1].plot(flist, cvlist_n, color='red')
+# ax[2].plot(flist, 1/tlist_p, color='blue')
+# ax[3].plot(flist, cvlist_p, color='red')
+# 
+# plt.tight_layout()
+# plt.show()
+# 
+# =============================================================================
+
+# =============================================================================
+# fig, ax = plt.subplots(2, 1, figsize=(6, 5))
+# 
+# ax[0].plot(flist, 1/tlist_n, color='blue', label='Negative feedback')
+# ax[0].plot(flist, 1/tlist_p, color='black', label='Positive feedback')
+# ax[0].legend()
+# 
+# ax[1].plot(flist, cvlist_n, color='red', label='Negative feedback')
+# ax[1].plot(flist, cvlist_p, color='black', label='Positive feedback')
+# ax[1].legend()
+# 
+# plt.tight_layout()
+# plt.show()
+# =============================================================================
