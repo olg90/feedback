@@ -89,7 +89,7 @@ def pr(z, prtype):
         return prbar/(1+pr1*z)
     if prtype == 'p':
         prbar=1
-        pr1=0.001
+        pr1=0.005
         prb=0.3
         return prb+(prbar-prb)*pr1*z/(1+pr1*z)
     if prtype == 0:
@@ -109,22 +109,22 @@ def get_data(prtype, flist, tauv):
 
 f=20
 M=100
-k=10
+k=10 #10
 
 tauv=0.015
 vth=0.2
 
 tauz=0.01
 cz=10
-kz=0.1
+kz=0.14 # 0.1
 
 n=0 # occupied states
 v=0
 z=0
 
 delta_t = 0.01
-tmax = 30 # <-------------- TMAX
-navgs=1
+tmax = 100 # <-------------- TMAX
+navgs = 100
 
 flist = np.linspace(0, 200, 100)
 
@@ -143,7 +143,7 @@ tlist_p, cvlist_p, bavgp = get_data(prtype, flist, tauv)
 prtype = 0
 tlist_0, cvlist_0, bavg0 = get_data(prtype, flist, tauv)
 
-fig, ax = plt.subplots(1, 3, figsize=(10, 3))
+fig, ax = plt.subplots(1, 2)
 
 # Tmean plots
 ax[0].plot(flist, 1/tlist_n, color='blue', label='Negative feedback')
@@ -157,11 +157,13 @@ ax[1].plot(flist, cvlist_p, color='red', label='Positive feedback')
 ax[1].plot(flist, cvlist_0, color='black', label='No feedback')
 ax[1].legend()
 
-# bavgs plots
-ax[2].plot(flist, bavgn, color='blue', label='Negative feedback')
-ax[2].plot(flist, bavgp, color='red', label='Positive feedback')
-ax[2].plot(flist, bavg0, color='black', label='No feedback')
-ax[2].legend()
+# =============================================================================
+# # bavgs plots
+# ax[2].plot(flist, bavgn, color='blue', label='Negative feedback')
+# ax[2].plot(flist, bavgp, color='red', label='Positive feedback')
+# ax[2].plot(flist, bavg0, color='black', label='No feedback')
+# ax[2].legend()
+# =============================================================================
 
 plt.tight_layout()
 plt.show()
