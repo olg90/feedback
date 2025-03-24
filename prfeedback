@@ -7,7 +7,102 @@ from numpy import exp
 from numpy import sqrt as Sqrt
 from numpy import log as Log
 
-def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype):
+def simk(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, ktype):
+
+    tavgs=[]
+    cavgs=[]
+    bavgs=[]
+    nmean=[]
+    zmean=[]
+
+    for _ in range(navgs):
+
+        nlist=[]
+        vlist=[]
+        vthlist=[]
+        zlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+        blist=[]
+
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k(z, ktype)*(M-n) + 1e-6)) # site gets occupied
+            t2 = timer
+
+            if t0 < t1 and t0 < t2: # AP occurrs
+                b = binomial(n, pr)
+                blist.append(b)
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+
+            elif t1<t0 and t1<t2: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+
+            else:
+                tmin=t2
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    nlist.append(n)
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    zlist.append(z)
+                    tlist.append(tcurr)
+
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+
+            # Update the continuous dynamics
+
+            v = v + (-v/tauv + kz*z) * tmin
+            z = z + (-z/tauz) * tmin
+
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2
+        FFn=np.var(nlist)/np.mean(nlist)
+        FFv=np.var(vlist)/np.mean(vlist)
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+        bavgs.append(np.mean(blist))
+        nmean.append(np.mean(nlist))
+        zmean.append(np.mean(zlist))
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    
+    bavgs = np.mean(bavgs)
+    nmean = np.mean(nmean)
+    zmean = np.mean(zmean)
+    #      0      1        2     3         4     5
+    return tlist, nlist, vlist, zlist, vthlist, prelist, \
+        postlist, Tmean, CVT2, FFn, FFv, bavgs, nmean, zmean
+#        6          7     8     9    10   11     12     13
+def k(z, ktype):
+    if ktype == 'n':
+        kbar=178
+        k1=3
+        return kbar/(1+k1*z)
+    if ktype == 'p':
+        kbar=25
+        k1=0.001
+        kb=7
+        return kb+(kbar-kb)*k1*z/(1+k1*z)
+    if ktype == 0:
+        return 10
+
+def simp(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype):
 
     tavgs=[]
     cavgs=[]
@@ -112,7 +207,7 @@ def pr(z, prtype):
     if prtype == 0:
         return 0.5
 
-def get_data(prtype, flist, tauv):
+def get_datak(prtype, flist, tauv):
     tlist=np.zeros_like(flist)
     cvlist=np.zeros_like(flist)
     bavgs = np.zeros_like(flist)
@@ -120,7 +215,7 @@ def get_data(prtype, flist, tauv):
     ffzavgs = np.zeros_like(flist)
     for i,f in enumerate(flist):
         print(i/len(flist))
-        res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype)
+        res = simk(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype)
         tlist[i]=res[7]
         cvlist[i]=res[8]
         bavgs[i]=res[11]
@@ -128,8 +223,23 @@ def get_data(prtype, flist, tauv):
         ffzavgs[i]=res[13]
     return ffnavgs, ffzavgs
 
+def get_datap(prtype, flist, tauv):
+    tlist=np.zeros_like(flist)
+    cvlist=np.zeros_like(flist)
+    bavgs = np.zeros_like(flist)
+    ffnavgs = np.zeros_like(flist)
+    ffzavgs = np.zeros_like(flist)
+    for i,f in enumerate(flist):
+        print(i/len(flist))
+        res = simp(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype)
+        tlist[i]=res[7]
+        cvlist[i]=res[8]
+        bavgs[i]=res[11]
+        ffnavgs[i]=res[12]
+        ffzavgs[i]=res[13]
+    return ffnavgs, ffzavgs
+#
 f=50
-k=10
 M=100
 
 tauv=np.inf # 0.05
@@ -137,21 +247,68 @@ vth=0.2
 
 tauz=1/100
 cz=50
-kz=0.2
+kz=0.01
 
 n=0 # occupied states
 v=0
 z=0
 
-delta_t = 0.01
-tmax = 100 # <-------------- TMAX
+delta_t = 0.001
+tmax = 0.2 # <-------------- TMAX
 navgs = 1
 
-flist = np.linspace(0, 200, 100)
+kval=10
+pval=0.5
 
-res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, 0)
-plt.plot(res[0], res[2])
-res[12], res[13]
+xp0 = simp(n, v, z, vth, f, pr, M, kval, tauv, tmax, delta_t, navgs, cz, kz, 0)
+xpn = simp(n, v, z, vth, f, pr, M, kval, tauv, tmax, delta_t, navgs, cz, kz, 'n')
+xpp = simp(n, v, z, vth, f, pr, M, kval, tauv, tmax, delta_t, navgs, cz, kz,'p')
+
+# =============================================================================
+# xk0 = simk(n, v, z, vth, f, pval, M, kval, tauv, tmax, delta_t, navgs, cz, kz, 0)
+# xkn = simk(n, v, z, vth, f, pval, M, kval, tauv, tmax, delta_t, navgs, cz, kz, 'n')
+# xkp = simk(n, v, z, vth, f, pval, M, kval, tauv, tmax, delta_t, navgs, cz, kz,'p')
+# =============================================================================
+
+# Extract results for each simulation
+t0, n0, v0, z0 = xp0[0], xp0[1], xp0[2], xp0[3]  # No feedback
+tn, n_n, v_n, z_n = xpn[0], xpn[1], xpn[2], xpn[3]  # Negative feedback
+tp, n_p, v_p, z_p = xpp[0], xpp[1], xpp[2], xpp[3]  # Positive feedback
+
+# Create 3x3 plot
+fig, axs = plt.subplots(3, 3, figsize=(12, 4), sharex=True)
+
+# Plot v for all feedback types
+axs[0, 0].plot(t0, v0)
+axs[0, 1].plot(tn, v_n)
+axs[0, 2].plot(tp, v_p)
+axs[0, 0].set_ylabel("v")
+
+# Plot n for all feedback types
+axs[1, 0].plot(t0, n0)
+axs[1, 1].plot(tn, n_n)
+axs[1, 2].plot(tp, n_p)
+axs[1, 0].set_ylabel("n")
+
+# Plot z for all feedback types
+axs[2, 0].plot(t0, z0)
+axs[2, 1].plot(tn, z_n)
+axs[2, 2].plot(tp, z_p)
+axs[2, 0].set_ylabel("z")
+axs[2, 0].set_xlabel("Time")
+axs[2, 1].set_xlabel("Time")
+axs[2, 2].set_xlabel("Time")
+
+# Column titles
+titles = ["No Feedback", "Negative Feedback", "Positive Feedback"]
+for i in range(3):
+    axs[0, i].set_title(titles[i])
+
+# Adjust layout
+plt.tight_layout()
+plt.show()
+
+
 #%%
 
 prtype = 'n'
