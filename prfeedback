@@ -101,16 +101,16 @@ def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prty
 
 def pr(z, prtype):
     if prtype == 'n':
-        prbar=0.3
-        pr1=0.005
+        prbar=0.5
+        pr1=0.001
         return prbar/(1+pr1*z)
     if prtype == 'p':
         prbar=1
-        pr1=0.005
-        prb=0.3
+        pr1=0.001
+        prb=0.5
         return prb+(prbar-prb)*pr1*z/(1+pr1*z)
     if prtype == 0:
-        return 0.3
+        return 0.5
 
 def get_data(prtype, flist, tauv):
     tlist=np.zeros_like(flist)
@@ -128,16 +128,16 @@ def get_data(prtype, flist, tauv):
         ffzavgs[i]=res[13]
     return ffnavgs, ffzavgs
 
-f=20
-M=30
-k=10 #10
+f=50
+k=10
+M=100
 
-tauv=0.01
+tauv=np.inf # 0.05
 vth=0.2
 
-tauz=0.1
-cz=10
-kz=0.1 # 0.1
+tauz=1/100
+cz=50
+kz=0.2
 
 n=0 # occupied states
 v=0
