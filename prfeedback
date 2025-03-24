@@ -12,6 +12,11 @@ def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prty
     tavgs=[]
     cavgs=[]
     bavgs=[]
+    ffnavgs=[]
+    ffzavgs=[]
+    nmean=[]
+    zmean=[]
+
 
     for _ in range(navgs):
 
@@ -70,17 +75,29 @@ def simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prty
         Tmean = np.mean(Tlist)
         CVT2=np.var(Tlist)/Tmean**2
         FFn=np.var(nlist)/np.mean(nlist)
+        FFz=np.var(zlist)/np.mean(zlist)
         FFv=np.var(vlist)/np.mean(vlist)
-        
+
         tavgs.append(Tmean)
         cavgs.append(CVT2)
         bavgs.append(np.mean(blist))
+        ffnavgs.append(FFn)
+        ffzavgs.append(FFz)
+        nmean.append(np.mean(nlist))
+        zmean.append(np.mean(zlist))
+        
     Tmean = np.mean(tavgs)
     CVT2 = np.mean(cavgs)
-    
     bavgs = np.mean(bavgs)
+    FFnavgs = np.mean(ffnavgs)
+    FFzavgs=np.mean(ffzavgs)
+    nmean = np.mean(nmean)
+    zmean = np.mean(zmean)
     
-    return tlist, nlist, vlist, zlist, vthlist, prelist, postlist, Tmean, CVT2, FFn, FFv, bavgs
+    #      0      1        2     3         4     5
+    return tlist, nlist, vlist, zlist, vthlist, prelist, \
+        postlist, Tmean, CVT2, FFn, FFv, bavgs, nmean, zmean
+#        6          7     8     9    10   11     12     13
 
 def pr(z, prtype):
     if prtype == 'n':
@@ -99,24 +116,28 @@ def get_data(prtype, flist, tauv):
     tlist=np.zeros_like(flist)
     cvlist=np.zeros_like(flist)
     bavgs = np.zeros_like(flist)
+    ffnavgs = np.zeros_like(flist)
+    ffzavgs = np.zeros_like(flist)
     for i,f in enumerate(flist):
         print(i/len(flist))
         res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype)
         tlist[i]=res[7]
         cvlist[i]=res[8]
         bavgs[i]=res[11]
-    return tlist, cvlist, bavgs
+        ffnavgs[i]=res[12]
+        ffzavgs[i]=res[13]
+    return ffnavgs, ffzavgs
 
 f=20
-M=100
+M=30
 k=10 #10
 
-tauv=0.015
+tauv=0.01
 vth=0.2
 
-tauz=0.01
+tauz=0.1
 cz=10
-kz=0.14 # 0.1
+kz=0.1 # 0.1
 
 n=0 # occupied states
 v=0
@@ -124,37 +145,36 @@ z=0
 
 delta_t = 0.01
 tmax = 100 # <-------------- TMAX
-navgs = 100
+navgs = 1
 
 flist = np.linspace(0, 200, 100)
 
-# =============================================================================
-# res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, 0)
-# plt.plot(res[0], res[2])
-# #%%
-# =============================================================================
+res = simulate(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, 0)
+plt.plot(res[0], res[2])
+res[12], res[13]
+#%%
 
 prtype = 'n'
-tlist_n, cvlist_n, bavgn = get_data(prtype, flist, tauv)
+ffnavgsn, ffzavgsn = get_data(prtype, flist, tauv)
 print()
 prtype = 'p'
-tlist_p, cvlist_p, bavgp = get_data(prtype, flist, tauv)
+ffnavgsp, ffzavgsp = get_data(prtype, flist, tauv)
 
 prtype = 0
-tlist_0, cvlist_0, bavg0 = get_data(prtype, flist, tauv)
+ffnavgs0, ffzavgs0 = get_data(prtype, flist, tauv)
 
 fig, ax = plt.subplots(1, 2)
 
-# Tmean plots
-ax[0].plot(flist, 1/tlist_n, color='blue', label='Negative feedback')
-ax[0].plot(flist, 1/tlist_p, color='red', label='Positive feedback')
-ax[0].plot(flist, 1/tlist_0, color='black', label='No feedback')
+# FFn plots
+ax[0].plot(flist, ffnavgsn, color='blue', label='Negative feedback')
+ax[0].plot(flist, ffnavgsp, color='red', label='Positive feedback')
+ax[0].plot(flist, ffnavgs0, color='black', label='No feedback')
 ax[0].legend()
 
-# CV^2 plots
-ax[1].plot(flist, cvlist_n, color='blue', label='Negative feedback')
-ax[1].plot(flist, cvlist_p, color='red', label='Positive feedback')
-ax[1].plot(flist, cvlist_0, color='black', label='No feedback')
+# FFz plots
+ax[1].plot(flist, ffzavgsn, color='blue', label='Negative feedback')
+ax[1].plot(flist, ffzavgsp, color='red', label='Positive feedback')
+ax[1].plot(flist, ffzavgs0, color='black', label='No feedback')
 ax[1].legend()
 
 # =============================================================================
@@ -167,8 +187,6 @@ ax[1].legend()
 
 plt.tight_layout()
 plt.show()
-
-
 
 #%%
 
