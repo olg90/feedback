@@ -1,0 +1,480 @@
+#%%
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial, gamma
+from numpy import exp
+from numpy import sqrt as Sqrt
+from numpy import log as Log
+
+def simk(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, ktype):
+
+    tavgs=[]
+    cavgs=[]
+    bavgs=[]
+    nmean=[]
+    zmean=[]
+    
+    ffnavgs=[]
+    ffzavgs=[]
+
+    for i in range(navgs):
+        print(i, navgs)
+
+        nlist=[]
+        vlist=[]
+        vthlist=[]
+        zlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+        blist=[]
+
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k(z, ktype)*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(z/tauz+1e-6))
+            t3 = timer
+
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+                b = binomial(n, pr)
+                blist.append(b)
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    nlist.append(n)
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    zlist.append(z)
+                    tlist.append(tcurr)
+
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+
+            # Update the continuous dynamics
+
+            v = v + (-v/tauv + kz*z) * tmin
+
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2 # Fano factor don't square it
+        FFn=np.var(nlist)/np.mean(nlist)
+        FFv=np.var(vlist)/np.mean(vlist)
+        FFz=np.var(zlist)/np.mean(zlist)
+        
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+        bavgs.append(np.mean(blist))
+        nmean.append(np.mean(nlist))
+        zmean.append(np.mean(zlist))
+        
+        ffnavgs.append(FFn)
+        ffzavgs.append(FFz)
+        
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    
+    bavgs = np.mean(bavgs)
+    nmean = np.mean(nmean)
+    zmean = np.mean(zmean)
+    
+    FFnavgs = np.mean(ffnavgs)
+    FFzavgs=np.mean(ffzavgs)
+    
+    #      0      1        2     3         4     5
+    return tlist, nlist, vlist, zlist, vthlist, prelist, \
+        postlist, Tmean, CVT2, FFn, FFv, bavgs, nmean, zmean, FFnavgs, FFzavgs
+#        6          7     8     9    10   11     12     13     14
+
+def simp(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype):
+
+    tavgs=[]
+    cavgs=[]
+    bavgs=[]
+    ffnavgs=[]
+    ffzavgs=[]
+    nmean=[]
+    zmean=[]
+
+    for i in range(navgs):
+        print(i, navgs)
+
+        nlist=[]
+        vlist=[]
+        vthlist=[]
+        zlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+        blist=[]
+
+        tcurr=0
+        ratio = 0.3
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(z/tauz+1e-6))
+            t3 = timer
+
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+                b = binomial(n, np.min([pr(z,prtype),1]))
+                blist.append(b)
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    nlist.append(n)
+                    vlist.append(v)
+                    vthlist.append(vth)
+                    zlist.append(z)
+                    tlist.append(tcurr)
+
+            tcurr += tmin
+            if v>=vth:
+                postlist.append(tcurr)
+                v=0
+
+            # Update the continuous dynamics
+
+            v = v + (-v/tauv + kz*z) * tmin
+
+        Tlist = np.diff(postlist)
+        Tmean = np.mean(Tlist)
+        CVT2=np.var(Tlist)/Tmean**2 # Fano factor dont square it
+        FFn=np.var(nlist)/np.mean(nlist)
+        FFz=np.var(zlist)/np.mean(zlist)
+        FFv=np.var(vlist)/np.mean(vlist)
+
+        tavgs.append(Tmean)
+        cavgs.append(CVT2)
+        bavgs.append(np.mean(blist))
+        ffnavgs.append(FFn)
+        ffzavgs.append(FFz)
+        nmean.append(np.mean(nlist))
+        zmean.append(np.mean(zlist))
+        
+    Tmean = np.mean(tavgs)
+    CVT2 = np.mean(cavgs)
+    bavgs = np.mean(bavgs)
+    FFnavgs = np.mean(ffnavgs)
+    FFzavgs=np.mean(ffzavgs)
+    nmean = np.mean(nmean)
+    zmean = np.mean(zmean)
+    
+    #      0      1        2     3         4     5
+    return tlist, nlist, vlist, zlist, vthlist, prelist, \
+        postlist, Tmean, CVT2, FFn, FFv, bavgs, nmean, zmean, FFnavgs, FFzavgs
+#        6          7     8     9    10   11     12     13    14
+
+def pr(z, prtype):
+    if prtype == 'n':
+        prbar=0.55
+        pr1=0.001
+        return prbar/(1+pr1*z)
+    if prtype == 'p':
+        prbar=1
+        pr1=0.001
+        prb=0.5
+        return prb+(prbar-prb)*pr1*z/(1+pr1*z)
+    if prtype == 0:
+        return 0.5
+    
+def k(z, ktype):
+    if ktype == 'n':
+        kbar=178
+        k1=3
+        return kbar/(1+k1*z)
+    if ktype == 'p':
+        kbar=25
+        k1=0.001
+        kb=7
+        return kb+(kbar-kb)*k1*z/(1+k1*z)
+    if ktype == 0:
+        return 10
+
+
+def get_datak(prtype, flist, tauv):
+    tlist=np.zeros_like(flist)
+    cvlist=np.zeros_like(flist)
+    bavgs = np.zeros_like(flist)
+    ffnavgs = np.zeros_like(flist)
+    ffzavgs = np.zeros_like(flist)
+    for i,f in enumerate(flist):
+        print(i/len(flist))
+        res = simk(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype)
+        tlist[i]=res[7]
+        cvlist[i]=res[8]
+        bavgs[i]=res[11]
+        ffnavgs[i]=res[12]
+        ffzavgs[i]=res[13]
+    return ffnavgs, ffzavgs
+
+def get_datap(prtype, flist, tauv):
+    tlist=np.zeros_like(flist)
+    cvlist=np.zeros_like(flist)
+    bavgs = np.zeros_like(flist)
+    ffnavgs = np.zeros_like(flist)
+    ffzavgs = np.zeros_like(flist)
+    for i,f in enumerate(flist):
+        print(i/len(flist))
+        res = simp(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, navgs, cz, kz, prtype)
+        tlist[i]=res[7]
+        cvlist[i]=res[8]
+        bavgs[i]=res[11]
+        ffnavgs[i]=res[12]
+        ffzavgs[i]=res[13]
+    return ffnavgs, ffzavgs
+#
+f=10
+M=100
+
+tauv=np.inf # 0.05
+vth=0.2
+
+tauz=1/100
+cz=50
+kz=0.01
+
+n=0 # occupied states
+v=0
+z=0
+
+delta_t = 0.01
+tmax = 100 # <-------------- TMAX
+navgs = 10
+
+kval=10
+pval=0.5
+
+## pr feedback
+xp0 = simp(n, v, z, vth, f, pr, M, kval, tauv, tmax, delta_t, navgs, cz, kz, 0)
+xpn = simp(n, v, z, vth, f, pr, M, kval, tauv, tmax, delta_t, navgs, cz, kz, 'n')
+xpp = simp(n, v, z, vth, f, pr, M, kval, tauv, tmax, delta_t, navgs, cz, kz,'p')
+
+print(xp0[12], xpn[12], xpp[12])
+print(xp0[13], xpn[13], xpp[13])
+
+#%%
+# =============================================================================
+# ## k feedback
+# xp0 = simk(n, v, z, vth, f, pval, M, k, tauv, tmax, delta_t, navgs, cz, kz, 0)
+# xpn = simk(n, v, z, vth, f, pval, M, k, tauv, tmax, delta_t, navgs, cz, kz, 'n')
+# xpp = simk(n, v, z, vth, f, pval, M, k, tauv, tmax, delta_t, navgs, cz, kz,'p')
+# =============================================================================
+
+print(xp0[12], xpn[12], xpp[12])
+print(xp0[13], xpn[13], xpp[13])
+
+#%%
+
+# Extract results for each simulation
+t0, n0, v0, z0, f0n, f0z, cv20 = xp0[0], xp0[1], xp0[2], xp0[3], xp0[14], xp0[15], xp0[8]  # No feedback
+tn, n_n, v_n, z_n, fnn, fnz, cv2n= xpn[0], xpn[1], xpn[2], xpn[3], xpn[14], xpn[15], xpn[8]  # Negative feedback
+tp, n_p, v_p, z_p, fpn, fpz, cv2p = xpp[0], xpp[1], xpp[2], xpp[3], xpp[14], xpp[15], xpp[8]  # Positive feedback
+
+# =============================================================================
+# # Create 3x3 plot
+# fig, axs = plt.subplots(3, 3, figsize=(12, 4), sharex=True)
+# 
+# # Plot v for all feedback types
+# axs[0, 0].plot(t0, v0)
+# axs[0, 1].plot(tn, v_n)
+# axs[0, 2].plot(tp, v_p)
+# axs[0, 0].set_ylabel("v")
+# 
+# # Plot n for all feedback types
+# axs[1, 0].plot(t0, n0)
+# axs[1, 1].plot(tn, n_n)
+# axs[1, 2].plot(tp, n_p)
+# axs[1, 0].set_ylabel("n")
+# 
+# # Plot z for all feedback types
+# axs[2, 0].plot(t0, z0)
+# axs[2, 1].plot(tn, z_n)
+# axs[2, 2].plot(tp, z_p)
+# axs[2, 0].set_ylabel("z")
+# axs[2, 0].set_xlabel("Time")
+# axs[2, 1].set_xlabel("Time")
+# axs[2, 2].set_xlabel("Time")
+# 
+# # Remove y-axis labels and ticks from non-left plots
+# for i in range(3):
+#     axs[i, 1].tick_params(axis='y', which='both', left=False, right=False)
+#     axs[i, 2].tick_params(axis='y', which='both', left=False, right=False)
+#     axs[i, 1].set_yticklabels([])  # Remove y-axis tick labels
+#     axs[i, 2].set_yticklabels([])  # Remove y-axis tick labels
+#     axs[i, 1].set_ylabel("")  # Clear y-axis label
+#     axs[i, 2].set_ylabel("")  # Clear y-axis label
+# 
+# # Remove x-axis labels and ticks from non-bottom plots
+# for i in range(2):  # For the first two rows
+#     axs[i, 0].tick_params(axis='x', which='both', bottom=False, top=False)
+#     axs[i, 1].tick_params(axis='x', which='both', bottom=False, top=False)
+#     axs[i, 2].tick_params(axis='x', which='both', bottom=False, top=False)
+#     axs[i, 0].set_xlabel("")  # Remove x-axis label
+#     axs[i, 1].set_xlabel("")  # Remove x-axis label
+#     axs[i, 2].set_xlabel("")  # Remove x-axis label
+# 
+# # Column titles
+# titles = ["No Feedback", "Negative Feedback", "Positive Feedback"]
+# for i in range(3):
+#     axs[0, i].set_title(titles[i])
+# 
+# # Adjust layout
+# plt.tight_layout()
+# plt.show()
+# =============================================================================
+
+print(f0n, fnn, fpn)
+print(f0z, fnz, fpz)
+print(cv20, cv2n, cv2p)
+
+#%%
+
+prtype = 'n'
+ffnavgsn, ffzavgsn = get_data(prtype, flist, tauv)
+print()
+prtype = 'p'
+ffnavgsp, ffzavgsp = get_data(prtype, flist, tauv)
+
+prtype = 0
+ffnavgs0, ffzavgs0 = get_data(prtype, flist, tauv)
+
+fig, ax = plt.subplots(1, 2)
+
+# FFn plots
+ax[0].plot(flist, ffnavgsn, color='blue', label='Negative feedback')
+ax[0].plot(flist, ffnavgsp, color='red', label='Positive feedback')
+ax[0].plot(flist, ffnavgs0, color='black', label='No feedback')
+ax[0].legend()
+
+# FFz plots
+ax[1].plot(flist, ffzavgsn, color='blue', label='Negative feedback')
+ax[1].plot(flist, ffzavgsp, color='red', label='Positive feedback')
+ax[1].plot(flist, ffzavgs0, color='black', label='No feedback')
+ax[1].legend()
+
+# =============================================================================
+# # bavgs plots
+# ax[2].plot(flist, bavgn, color='blue', label='Negative feedback')
+# ax[2].plot(flist, bavgp, color='red', label='Positive feedback')
+# ax[2].plot(flist, bavg0, color='black', label='No feedback')
+# ax[2].legend()
+# =============================================================================
+
+plt.tight_layout()
+plt.show()
+
+#%%
+
+# =============================================================================
+# flist = np.linspace(0, 100, 100)
+# prtype='n'
+# plt.plot(flist, 1/tlist, color='blue')
+# plt.ylabel('Firing rate', color='blue')
+# plt.xlabel('Input frequency')
+# plt.tick_params(axis='y', labelcolor='blue')
+# plt.gca().twinx()
+# plt.plot(flist, cvlist, color='red')
+# plt.ylabel('CV^2', color='red')
+# plt.tick_params(axis='y', labelcolor='red')
+# 
+# if (flist<1/tlist).any():
+#     plt.plot(100*np.ones(len(flist)), np.linspace(0,np.max(1/tlist),len(flist)))
+#     plt.plot(flist, flist, color='k')
+# =============================================================================
+
+
+# =============================================================================
+# fig, axs = plt.subplots(2, 2)
+# 
+# axs[0, 0].plot(flist, 1/tlist_n, color='blue')
+# axs[0, 0].set_ylabel('Firing rate')
+# axs[0, 0].set_xlabel('Input frequency')
+# axs[0, 0].tick_params(axis='y')
+# axs[0,0].set_title('Negative feedback')
+# 
+# axs[1, 0].plot(flist, cvlist_n, color='red')
+# axs[1, 0].set_ylabel('CV^2')
+# axs[1, 0].set_xlabel('Input frequency')
+# axs[1, 0].tick_params(axis='y')
+# 
+# axs[0, 1].plot(flist, 1/tlist_p, color='blue')
+# axs[0, 1].set_xlabel('Input frequency')
+# axs[0, 1].tick_params(axis='y')
+# axs[0, 1].set_title('Positive feedback')
+# 
+# axs[1, 1].plot(flist, cvlist_p, color='red')
+# axs[1, 1].set_xlabel('Input frequency')
+# axs[1, 1].tick_params(axis='y')
+# 
+# plt.tight_layout()
+# plt.show()
+# =============================================================================
+
+# =============================================================================
+# fig, ax = plt.subplots(1, 4, figsize=(12,2.5))
+# 
+# ax[0].plot(flist, 1/tlist_n, color='blue')
+# ax[1].plot(flist, cvlist_n, color='red')
+# ax[2].plot(flist, 1/tlist_p, color='blue')
+# ax[3].plot(flist, cvlist_p, color='red')
+# 
+# plt.tight_layout()
+# plt.show()
+# 
+# =============================================================================
+
+# =============================================================================
+# fig, ax = plt.subplots(2, 1, figsize=(6, 5))
+# 
+# ax[0].plot(flist, 1/tlist_n, color='blue', label='Negative feedback')
+# ax[0].plot(flist, 1/tlist_p, color='black', label='Positive feedback')
+# ax[0].legend()
+# 
+# ax[1].plot(flist, cvlist_n, color='red', label='Negative feedback')
+# ax[1].plot(flist, cvlist_p, color='black', label='Positive feedback')
+# ax[1].legend()
+# 
+# plt.tight_layout()
+# plt.show()
+# =============================================================================
