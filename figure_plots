@@ -7,68 +7,71 @@ from numpy import exp
 from numpy import sqrt as Sqrt
 from numpy import log as Log
 
+def simk(vth, f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
+    FFnlist=[]
+    FFzlist=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+    
+        nlist=[]
+        zlist=[]
+        tlist=[]
+        prelist=[]
+        postlist=[]
+    
+        tcurr = 0
+        ratio = 0.3
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+                b = binomial(n, pr(z, xb, xmax, rate1))
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    nlist.append(n)
+                    zlist.append(z)
+                    tlist.append(tcurr)
+    
+            tcurr += tmin
+    
+        FFn=np.var(nlist)/np.mean(nlist)
+        FFz=np.var(zlist)/np.mean(zlist)
+        FFnlist.append(FFn)
+        FFzlist.append(FFz)
+    FFn = np.mean(FFnlist)
+    FFz = np.mean(FFzlist)
 
-def simk(n, v, z, vth, f, pr, M, k, tauv, tmax, delta_t, cz, kz, gz):
+    return tlist, nlist, zlist, prelist, postlist, FFn, FFz
 
-    nlist=[]
-    vlist=[]
-    vthlist=[]
-    zlist=[]
-    tlist=[]
-    prelist=[]
-    postlist=[]
-
-    tcurr=0
-    ratio = 0.3
-    timer = delta_t
-    while tcurr < tmax:
-        t0=exponential(1/f) # action potential
-        t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
-        t2 = exponential(1/(gz*z+1e-6))
-        t3 = timer
-
-        if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
-            b = binomial(n, pr)
-            n-=b
-            z=z+cz*b
-            tmin = t0
-            timer-=tmin
-            prelist.append(tcurr+tmin)
-
-        elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
-            n+=1
-            tmin = t1
-            timer-=tmin
-            
-        elif t2<t0 and t2<t1 and t2<t3:
-            z-=1
-            tmin=t2
-            timer-=tmin
-
-        else:
-            tmin=t3
-            timer = delta_t
-            if tcurr >= ratio*tmax:
-                nlist.append(n)
-                vlist.append(v)
-                vthlist.append(vth)
-                zlist.append(z)
-                tlist.append(tcurr)
-
-        tcurr += tmin
-        if v>vth:
-            postlist.append(tcurr)
-            v=0
-
-        # Update the continuous dynamics
-        v = v + (-v/tauv + kz*z) * tmin
-
-    return tlist, nlist, zlist, vlist, prelist, postlist
-
-n,z,v=0,0,0
+def xfun(z, xb, xmax, rate1):
+    return xb+(xmax-xb)*rate1*z/(1+rate1*z)
 
 f=20
-pr=0.1
+# pr=0.1
+pr=xfun
 k=10
 M=100
 tauv=1
@@ -78,45 +81,40 @@ cz=100
 kz=0.0005
 gz=50
 
+
+xb=0.5
+xmax=1
+rate1=1
+
 tmax=1
 delta_t=0.001
+navgs=1
 
+t, n, z, pre, post, FFn, FFz = simk(vth, f, pr, M, k, tauv, tmax, 
+                                       delta_t, cz, gz, navgs, xb, xmax, rate1)
+# =============================================================================
+# pre = [x for x in pre if x>0.3*tmax]
+# post = [x for x in post if x>0.3*tmax]
+# =============================================================================
 
-t, n, z, v, pre, post = simk(0,0,0, vth, f, pr, M, k, tauv, tmax, delta_t, cz, kz, gz)
-
-pre = [x for x in pre if x>0.3*tmax]
-post = [x for x in post if x>0.3*tmax]
-#%%
 fs=20
-plt.subplot(3,1,1)
+plt.subplot(2,1,1)
 plt.plot(t,n, color='#ff7f0e', linewidth=3)
 plt.ylabel('# of docked\nsynaptic\nvesicles', fontsize=fs)
-for x in pre:
-    plt.axvline(x, color='blue', alpha=0.3)
+# =============================================================================
+# for x in pre:
+#     plt.axvline(x, color='blue', alpha=0.3)
+# =============================================================================
 plt.xticks([])
 plt.text(0.313, 100, r'Presynaptic action potential', fontsize=fs)
 plt.text(0.637, 100, r'$\downarrow$', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
 
-plt.subplot(3,1,2)
+plt.subplot(2,1,2)
 plt.plot(t,z, color='#2ca02c', linewidth=3)
-plt.xticks([])
 plt.ylabel('# of neuro-\ntransmitters', fontsize=fs)
 plt.tick_params(axis='both', labelsize=fs)
 
-plt.subplot(3,1,3)
-plt.plot(t, v, zorder=1, color='#1f77b4', linewidth=3)  # background line
-plt.scatter(post, vth*np.ones(len(post)), color='r', 
-            edgecolors='k', zorder=5, s=100)  # on top
-plt.ylabel('Membrane\npotential\n(volts)', fontsize=fs)
-plt.ylim([0, 0.03])
-plt.text(0.28, 0.025, r'Postsynaptic action potential $\rightarrow$', fontsize=fs)
-plt.scatter(0.665, 0.0265, edgecolors='k', color='r',s=100)
-plt.plot(t, vth*np.ones(len(t)), color='k', linestyle='--', alpha=0.4)
-plt.text(0.78, 0.025, r'Threshold potential', fontsize=fs)
-plt.text(0.975, 0.021, r'$\downarrow$', fontsize=fs)
-plt.xlabel('Time (sec)', fontsize=fs)
-plt.tick_params(axis='both', labelsize=fs)
 
 plt.subplots_adjust(top=0.926,
 bottom=0.135,
@@ -126,3 +124,45 @@ hspace=0.249,
 wspace=0.2)
 
 plt.show()
+#%%
+
+f=20
+# pr=0.1
+pr=xfun
+k=10
+M=100
+tauv=1
+vth=0.02
+
+cz=100
+kz=0.0005
+gz=50
+
+xb=0.5
+xmax=1
+rate1=1
+
+tmax=30
+delta_t=0.001
+navgs=10
+xlist=np.linspace(1,100,10)
+FFnlist=np.zeros_like(xlist)
+FFzlist=np.zeros_like(xlist)
+for i,x in enumerate(xlist):
+    print(i, len(xlist))
+    f=x
+    tlist, nlist, zlist, prelist, postlist, FFn, FFz = \
+        simk(vth, f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, 
+             xb, xmax, rate1)
+    FFnlist[i]=FFn
+    FFzlist[i]=FFz
+    
+plt.subplot(2,1,1)
+plt.plot(xlist, FFnlist)
+plt.ylabel('FFn')
+plt.xticks([])
+plt.subplot(2,1,2)
+plt.plot(xlist, FFzlist)
+plt.ylabel('FFz')
+plt.xlabel('pr')
+plt.show()                      
