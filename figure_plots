@@ -7,7 +7,7 @@ from numpy import exp
 from numpy import sqrt as Sqrt
 from numpy import log as Log
 
-def simk(vth, f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
+def simk(f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
     FFnlist=[]
     FFzlist=[]
     for _ in range(navgs):
@@ -69,7 +69,7 @@ def simk(vth, f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
 def xfun(z, xb, xmax, rate1):
     return xb+(xmax-xb)*rate1*z/(1+rate1*z)
 
-f=20
+f=50
 # pr=0.1
 pr=xfun
 k=10
@@ -78,73 +78,56 @@ tauv=1
 vth=0.02
 
 cz=100
-kz=0.0005
-gz=50
-
-
-xb=0.5
-xmax=1
-rate1=1
-
-tmax=1
-delta_t=0.001
-navgs=1
-
-t, n, z, pre, post, FFn, FFz = simk(vth, f, pr, M, k, tauv, tmax, 
-                                       delta_t, cz, gz, navgs, xb, xmax, rate1)
-# =============================================================================
-# pre = [x for x in pre if x>0.3*tmax]
-# post = [x for x in post if x>0.3*tmax]
-# =============================================================================
-
-fs=20
-plt.subplot(2,1,1)
-plt.plot(t,n, color='#ff7f0e', linewidth=3)
-plt.ylabel('# of docked\nsynaptic\nvesicles', fontsize=fs)
-# =============================================================================
-# for x in pre:
-#     plt.axvline(x, color='blue', alpha=0.3)
-# =============================================================================
-plt.xticks([])
-plt.text(0.313, 100, r'Presynaptic action potential', fontsize=fs)
-plt.text(0.637, 100, r'$\downarrow$', fontsize=fs)
-plt.tick_params(axis='both', labelsize=fs)
-
-plt.subplot(2,1,2)
-plt.plot(t,z, color='#2ca02c', linewidth=3)
-plt.ylabel('# of neuro-\ntransmitters', fontsize=fs)
-plt.tick_params(axis='both', labelsize=fs)
-
-
-plt.subplots_adjust(top=0.926,
-bottom=0.135,
-left=0.171,
-right=0.973,
-hspace=0.249,
-wspace=0.2)
-
-plt.show()
-#%%
-
-f=20
-# pr=0.1
-pr=xfun
-k=10
-M=100
-tauv=1
-vth=0.02
-
-cz=100
-kz=0.0005
 gz=50
 
 xb=0.5
 xmax=1
 rate1=1
 
-tmax=30
+tmax=10
 delta_t=0.001
 navgs=10
+
+
+
+# =============================================================================
+# t, n, z, pre, post, FFn, FFz = simk(f, pr, M, k, tauv, tmax, 
+#                                        delta_t, cz, gz, navgs, xb, xmax, rate1)
+# # =============================================================================
+# # pre = [x for x in pre if x>0.3*tmax]
+# # post = [x for x in post if x>0.3*tmax]
+# # =============================================================================
+# 
+# fs=20
+# plt.subplot(2,1,1)
+# plt.plot(t,n, color='#ff7f0e', linewidth=3)
+# plt.ylabel('# of docked\nsynaptic\nvesicles', fontsize=fs)
+# # =============================================================================
+# # for x in pre:
+# #     plt.axvline(x, color='blue', alpha=0.3)
+# # =============================================================================
+# plt.xticks([])
+# plt.text(0.313, 100, r'Presynaptic action potential', fontsize=fs)
+# plt.text(0.637, 100, r'$\downarrow$', fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# 
+# plt.subplot(2,1,2)
+# plt.plot(t,z, color='#2ca02c', linewidth=3)
+# plt.ylabel('# of neuro-\ntransmitters', fontsize=fs)
+# plt.tick_params(axis='both', labelsize=fs)
+# 
+# 
+# plt.subplots_adjust(top=0.926,
+# bottom=0.135,
+# left=0.171,
+# right=0.973,
+# hspace=0.249,
+# wspace=0.2)
+# 
+# plt.show()
+# =============================================================================
+
+
 xlist=np.linspace(1,100,10)
 FFnlist=np.zeros_like(xlist)
 FFzlist=np.zeros_like(xlist)
@@ -152,7 +135,7 @@ for i,x in enumerate(xlist):
     print(i, len(xlist))
     f=x
     tlist, nlist, zlist, prelist, postlist, FFn, FFz = \
-        simk(vth, f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, 
+        simk(f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, 
              xb, xmax, rate1)
     FFnlist[i]=FFn
     FFzlist[i]=FFz
@@ -164,5 +147,5 @@ plt.xticks([])
 plt.subplot(2,1,2)
 plt.plot(xlist, FFzlist)
 plt.ylabel('FFz')
-plt.xlabel('pr')
+plt.xlabel('Input frequency')
 plt.show()                      
