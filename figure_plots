@@ -75,7 +75,6 @@ pr=xfun
 k=10
 M=100
 tauv=1
-vth=0.02
 
 cz=100
 gz=50
