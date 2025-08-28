@@ -7,9 +7,10 @@ from numpy import exp
 from numpy import sqrt as Sqrt
 from numpy import log as Log
 
-def simk(f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
+def simk(f, pr, M, k, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
     FFnlist=[]
     FFzlist=[]
+    bavgs=[]
     for _ in range(navgs):
         n=0
         z=0
@@ -19,9 +20,10 @@ def simk(f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
         tlist=[]
         prelist=[]
         postlist=[]
+        blist=[]
     
         tcurr = 0
-        ratio = 0.3
+        ratio = 0
         timer = delta_t
         while tcurr < tmax:
             t0=exponential(1/f) # action potential
@@ -30,7 +32,12 @@ def simk(f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
             t3 = timer
     
             if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
-                b = binomial(n, pr(z, xb, xmax, rate1))
+            
+                if pr==xfunpos:
+                    b = binomial(n, pr(z, xb, xmax, rate1))
+                if pr==xfunneg:
+                    b = binomial(n, pr(z, xmax, rate1))
+                blist.append(b)
                 n-=b
                 z=z+cz*b
                 tmin = t0
@@ -61,36 +68,250 @@ def simk(f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
         FFz=np.var(zlist)/np.mean(zlist)
         FFnlist.append(FFn)
         FFzlist.append(FFz)
+        bavgs.append(blist)
     FFn = np.mean(FFnlist)
     FFz = np.mean(FFzlist)
 
     return tlist, nlist, zlist, prelist, postlist, FFn, FFz
 
-def xfun(z, xb, xmax, rate1):
+def xfunpos(z, xb, xmax, rate1):
     return xb+(xmax-xb)*rate1*z/(1+rate1*z)
 
-f=50
-# pr=0.1
-pr=xfun
+def xfunneg(z, xmax, rate1):
+    return xmax/(1+rate1*z)
+
+
+def simd(f, pr, M, k, delta_t, gz, navgs, xb, xmax, rate1, naps):
+    bavgs=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        blist=[]
+        timer = delta_t
+        aptimer=1/f
+        apnum=0
+        tcurr=0
+        while apnum<naps:
+            t0=aptimer # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+                b = binomial(n, pr(z, xb, xmax, rate1))
+                blist.append(b)
+                apnum+=1
+                n-=b
+                tmin = t0
+                timer-=tmin
+                aptimer=1/f
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                aptimer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+                aptimer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                aptimer-=tmin
+            tcurr += tmin
+        bavgs.append(blist)
+    bavgs=np.mean(np.array(bavgs), axis=0)
+    bvars=np.var(np.array(bavgs), axis=0)
+    bff = bvars/bavgs
+    return bavgs, bff
+
+def simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1):
+    tav =[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        v=0
+        tlist=[]
+        vlist=[]
+        nlist=[]
+        zlist=[]
+        prelist=[]
+        postlist=[]
+        tmean=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+            
+                if pr==xfunpos:
+                    b = binomial(n, pr(z, xb, xmax, rate1))
+                if pr==xfunneg:
+                    b = binomial(n, pr(z, xmax, rate1))
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    tlist.append(tcurr)
+                    # nlist.append(n)
+                    # zlist.append(z)
+                    vlist.append(v)
+                    
+            if v>vth:
+                postlist.append(tcurr)
+                v=0
+                    
+            v=v+(-v/tauv+kz*z)*tmin
+            tcurr += tmin
+        tmean.append(np.mean(np.diff(postlist)))
+    tav=np.mean(tmean)
+    return tlist, nlist, zlist, vlist, prelist, postlist, tav
+
+f=10
+pr=xfunpos
+# pr=xfunneg
 k=10
 M=100
-tauv=1
-
-cz=100
+tauv=0.5
+vth=0.2
+kz=0.02
 gz=50
+cz=10
+if pr==xfunpos:
+    xb=0.1
+    xmax=0.6
+    rate1=10
+if pr==xfunneg:
+    xmax=0.6
+    rate1=10
 
-xb=0.5
-xmax=1
-rate1=1
-
-tmax=10
 delta_t=0.001
-navgs=10
-
-
+tmax=20
+navgs=1
 
 # =============================================================================
-# t, n, z, pre, post, FFn, FFz = simk(f, pr, M, k, tauv, tmax, 
+# res=simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+# fig, ax = plt.subplots(3,1)
+# ax[0].plot(res[0], res[1]); ax[0].set_ylabel('n')
+# ax[1].plot(res[0], res[2]); ax[1].set_ylabel('z')
+# ax[2].plot(res[0], res[3]); ax[2].set_ylabel('v')
+# ax[2].plot(res[0], vth*np.ones(len(res[0])), color='k')
+# for x in res[5]:
+#     plt.axvline(x, color='r', alpha=0.3)
+# print(1/res[6])
+# plt.show()
+# #%%
+# =============================================================================
+
+# =============================================================================
+# # Negative
+# flist=np.linspace(1,100,100)
+# foutneg=[]
+# for i, f in enumerate(flist):
+#     print(i, len(flist))
+#     res=simkv(f, xfunneg, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+#     foutneg.append(1/res[6])
+#     
+# # Feedback
+# flist=np.linspace(1,100,100)
+# foutpos=[]
+# for i, f in enumerate(flist):
+#     print(i, len(flist))
+#     res=simkv(f, xfunpos, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+#     foutpos.append(1/res[6])
+# =============================================================================
+
+# No feedback
+flist=np.linspace(1,100,100)
+foutnorm=[]
+prnone=xmax
+for i, f in enumerate(flist):
+    print(i, len(flist))
+    res=simkv(f, xfunpos, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, prnone, prnone, rate1)
+    foutnorm.append(1/res[6])
+    
+    
+# =============================================================================
+# np.save('neg', foutneg)
+# np.save('pos', foutpos)
+# np.save('none', foutnorm)
+# =============================================================================
+
+# =============================================================================
+# import os
+# os.chdir(r'C:\Users\ogamb\OneDrive\Desktop\Research\Feedback')
+# 
+# foutneg=np.load('neg.npy')
+# foutpos=np.load('pos.npy')
+# foutnorm=np.load('none.npy')
+# =============================================================================
+    
+fs=15
+plt.title('Negative feedback', fontsize=fs)
+plt.plot(flist, foutneg, linewidth=5, label='Negative feedback')
+plt.plot(flist, foutpos, linewidth=5, label='Positive feedback')
+plt.plot(flist, foutnorm, linewidth=5, label='No feedback')
+plt.tick_params(axis='both', labelsize=fs)
+plt.ylabel('Mean postsynaptic firing rate (Hz)', fontsize=fs)
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.legend()
+plt.show()
+
+# =============================================================================
+# def moving_average(x, w):
+#     return np.convolve(x, np.ones(w)/w, mode='valid')
+# 
+# window = 10
+# fs = 15
+# 
+# # Smooth each output with moving average
+# foutneg_smooth = moving_average(foutneg, window)
+# foutpos_smooth = moving_average(foutpos, window)
+# foutnorm_smooth = moving_average(foutnorm, window)
+# 
+# # Adjust x-axis (flist) since smoothing shortens the array
+# flist_smooth = flist[window-1:]
+# 
+# plt.title('Negative feedback', fontsize=fs)
+# plt.plot(flist_smooth, foutneg_smooth, linewidth=5, label='Negative feedback')
+# plt.plot(flist_smooth, foutpos_smooth, linewidth=5, label='Positive feedback')
+# plt.plot(flist_smooth, foutnorm_smooth, linewidth=5, label='No feedback')
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.ylabel('Mean postsynaptic firing rate (Hz)', fontsize=fs)
+# plt.xlabel('Input frequency (Hz)', fontsize=fs)
+# plt.legend()
+# plt.xlim([])
+# plt.show()
+# 
+# =============================================================================
+
+# =============================================================================
+# t, n, z, pre, post, FFn, FFz = simk(f, pr, M, k, tmax, 
 #                                        delta_t, cz, gz, navgs, xb, xmax, rate1)
 # # =============================================================================
 # # pre = [x for x in pre if x>0.3*tmax]
@@ -124,27 +345,38 @@ navgs=10
 # wspace=0.2)
 # 
 # plt.show()
+# #%%
 # =============================================================================
 
-
-xlist=np.linspace(1,100,10)
-FFnlist=np.zeros_like(xlist)
-FFzlist=np.zeros_like(xlist)
-for i,x in enumerate(xlist):
-    print(i, len(xlist))
-    f=x
-    tlist, nlist, zlist, prelist, postlist, FFn, FFz = \
-        simk(f, pr, M, k, tauv, tmax, delta_t, cz, gz, navgs, 
-             xb, xmax, rate1)
-    FFnlist[i]=FFn
-    FFzlist[i]=FFz
-    
-plt.subplot(2,1,1)
-plt.plot(xlist, FFnlist)
-plt.ylabel('FFn')
-plt.xticks([])
-plt.subplot(2,1,2)
-plt.plot(xlist, FFzlist)
-plt.ylabel('FFz')
-plt.xlabel('Input frequency')
-plt.show()                      
+# =============================================================================
+# # Plot FFn FFz vs f or pr or k
+# xlist=np.linspace(1,200,20)
+# ffnlistk=[]
+# klist=[10,20,30,50,100]
+# for j, k in enumerate(klist):
+#     FFnlist=np.zeros_like(xlist)
+#     for i,x in enumerate(xlist):
+#         print(j, len(klist), i, len(xlist))
+#         f=x
+#         tlist, nlist, zlist, prelist, postlist, FFn, FFz = \
+#             simk(f, pr, M, k, tmax, delta_t, cz, gz, navgs,
+#                  xb, xmax, rate1)
+#         FFnlist[i]=FFn
+#         # FFzlist[i]=FFz
+#     ffnlistk.append(FFnlist)
+# 
+# # plt.subplot(2,1,1)
+# fs=20
+# ms=['o', 'x', 's', '^', 'v']
+# for i,ffn in enumerate(ffnlistk):
+#     plt.plot(xlist, ffn, label='k={}'.format(klist[i]))# marker=ms[i])
+# plt.ylabel('Fano factor of the\n# of docked SVs', fontsize=fs)
+# # plt.xticks([])
+# # plt.subplot(2,1,2) 
+# # plt.plot(xlist, FFzlist)
+# # plt.ylabel('FFz')
+# plt.xlabel('Input frequency (Hz)', fontsize=fs)
+# plt.legend(fontsize=fs-7)
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.show()                      
+# =============================================================================
