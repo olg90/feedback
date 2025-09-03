@@ -1017,7 +1017,6 @@ for i, f in enumerate(flist):
 # CV plot
 fs=15
 lw=1
-plt.title('Negative feedback', fontsize=fs)
 plt.plot(flist, ffneg, linewidth=lw, label='Negative feedback')
 plt.plot(flist, ffpos, linewidth=lw, label='Positive feedback')
 plt.plot(flist, ffnorm, linewidth=lw, label='No feedback')
@@ -1030,7 +1029,6 @@ plt.show()
 # firing time plot
 fs=15
 lw=1
-plt.title('Negative feedback', fontsize=fs)
 plt.plot(flist, 1/np.array(tneg), linewidth=lw, label='Negative feedback')
 plt.plot(flist, 1/np.array(tpos), linewidth=lw, label='Positive feedback')
 plt.plot(flist, 1/np.array(tnorm), linewidth=lw, label='No feedback')
@@ -1045,12 +1043,11 @@ plt.show()
 # b
 fs=15
 lw=1
-plt.title('Negative feedback', fontsize=fs)
-plt.plot(flist, bp, linewidth=lw, label='Negative feedback')
-plt.plot(flist, bn, linewidth=lw, label='Positive feedback')
+plt.plot(flist, bp, linewidth=lw, label='Posiitve feedback')
+plt.plot(flist, bn, linewidth=lw, label='Neagtive feedback')
 plt.plot(flist, bno, linewidth=lw, label='No feedback')
 plt.tick_params(axis='both', labelsize=fs)
-plt.ylabel('mean firing rate', fontsize=fs)
+plt.ylabel('b', fontsize=fs)
 plt.xlabel('Input frequency (Hz)', fontsize=fs)
 plt.legend()
 plt.show()
@@ -1058,12 +1055,11 @@ plt.show()
 # bc
 fs=15
 lw=1
-plt.title('Negative feedback', fontsize=fs)
-plt.plot(flist, bcp, linewidth=lw, label='Negative feedback')
-plt.plot(flist, bcn, linewidth=lw, label='Positive feedback')
+plt.plot(flist, bcp, linewidth=lw, label='Positive feedback')
+plt.plot(flist, bcn, linewidth=lw, label='Negative feedback')
 plt.plot(flist, bcno, linewidth=lw, label='No feedback')
 plt.tick_params(axis='both', labelsize=fs)
-plt.ylabel('mean firing rate', fontsize=fs)
+plt.ylabel('cv2b', fontsize=fs)
 plt.xlabel('Input frequency (Hz)', fontsize=fs)
 plt.legend()
 plt.show()
@@ -1272,7 +1268,6 @@ for i, f in enumerate(flist):
 # CV plot
 fs=15
 lw=1
-plt.title('Negative feedback', fontsize=fs)
 plt.plot(flist, ffneg, linewidth=lw, label='Negative feedback')
 plt.plot(flist, ffpos, linewidth=lw, label='Positive feedback')
 plt.plot(flist, ffnorm, linewidth=lw, label='No feedback')
@@ -1285,7 +1280,6 @@ plt.show()
 # firing time plot
 fs=15
 lw=1
-plt.title('Negative feedback', fontsize=fs)
 plt.plot(flist, 1/np.array(tneg), linewidth=lw, label='Negative feedback')
 plt.plot(flist, 1/np.array(tpos), linewidth=lw, label='Positive feedback')
 plt.plot(flist, 1/np.array(tnorm), linewidth=lw, label='No feedback')
@@ -1301,12 +1295,11 @@ plt.show()
 # b
 fs=15
 lw=1
-plt.title('Negative feedback', fontsize=fs)
-plt.plot(flist, bp, linewidth=lw, label='Negative feedback')
-plt.plot(flist, bn, linewidth=lw, label='Positive feedback')
+plt.plot(flist, bp, linewidth=lw, label='Positive feedback')
+plt.plot(flist, bn, linewidth=lw, label='Negative feedback')
 plt.plot(flist, bno, linewidth=lw, label='No feedback')
 plt.tick_params(axis='both', labelsize=fs)
-plt.ylabel('mean firing rate', fontsize=fs)
+plt.ylabel('b', fontsize=fs)
 plt.xlabel('Input frequency (Hz)', fontsize=fs)
 plt.legend()
 plt.show()
@@ -1315,11 +1308,11 @@ plt.show()
 fs=15
 lw=1
 plt.title('Negative feedback', fontsize=fs)
-plt.plot(flist, bcp, linewidth=lw, label='Negative feedback')
-plt.plot(flist, bcn, linewidth=lw, label='Positive feedback')
+plt.plot(flist, bcp, linewidth=lw, label='Positive feedback')
+plt.plot(flist, bcn, linewidth=lw, label='Negative feedback')
 plt.plot(flist, bcno, linewidth=lw, label='No feedback')
 plt.tick_params(axis='both', labelsize=fs)
-plt.ylabel('mean firing rate', fontsize=fs)
+plt.ylabel('cvb', fontsize=fs)
 plt.xlabel('Input frequency (Hz)', fontsize=fs)
 plt.legend()
 plt.show()
