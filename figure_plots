@@ -917,21 +917,20 @@ def simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, ra
             v=v+(-v/tauv+kz*z)*tmin
             tcurr += tmin
             
-        nav.append(nlist)
-        zav.append(zlist)
-        print(postlist)
-        print(np.diff(postlist))
+
         tdiffs=np.diff(postlist)
         tav.append(np.mean(tdiffs))
         cvav.append(np.var(tdiffs)/np.mean(tdiffs)**2)
-        bav.append(blist)
+        nav.append(np.mean(nlist))
+        zav.append(np.mean(zlist))
+        bav.append(np.mean(blist))
     cvav=np.mean(cvav)
     tav=np.mean(tav)
-    bav=np.mean(trim_to_smallest(bav), axis=0)
-    nav=np.mean(trim_to_smallest(nav), axis=0)
-    zav=np.mean(trim_to_smallest(zav), axis=0)
+    bav=np.mean(blist)
+    nav=np.mean(nav)
+    zav=np.mean(zav)
     
-    return tlist, nlist, zlist, vlist, prelist, postlist, cvav, tav, nav, zav, bav
+    return tlist, nlist, zlist, vlist, prelist, postlist, cvav, tav, nav, bav, zav
 
 def trim_to_smallest(lists):
     if not lists:  # handle empty input
@@ -969,7 +968,7 @@ rate1=rate1p
 
 delta_t=0.01
 tmax=20
-navgs=50
+navgs=1
 
 fmax=40
 nfvals=20
@@ -988,48 +987,54 @@ flist=np.linspace(1,fmax,nfvals)
 ffpos=[]
 tpos=[]
 npos=[]
-zp=[]
 bp=[]
+zp=[]
+
 for i, f in enumerate(flist):
     print(i, len(flist))
     res=simkv(f, pr, M, xfunpos, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xbp, xmaxp, rate1p)
     ffpos.append(res[6])
     tpos.append(res[7])
     npos.append(res[8])
-    zp.append(res[9])
-    bp.append(res[10])
+    bp.append(res[9])
+    zp.append(res[10])
+    
 
 # Negative
 flist=np.linspace(1,fmax,nfvals)
 ffneg=[]
 tneg=[]
 nn=[]
-zn=[]
 bn=[]
+zn=[]
+
 for i, f in enumerate(flist):
     print(i, len(flist))
     res=simkv(f, pr, M, xfunneg, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xbn, xmaxn, rate1n)
     ffneg.append(res[6])
     tneg.append(res[7])
     nn.append(res[8])
-    zn.append(res[9])
-    bn.append(res[10])
+    bn.append(res[9])
+    zn.append(res[10])
+
 
 # No feedback
 flist=np.linspace(1,fmax,nfvals)
 ffnorm=[]
 tnorm=[]
 nno=[]
-zno=[]
 bno=[]
+zno=[]
+
 for i, f in enumerate(flist):
     print(i, len(flist))
     res=simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
     ffnorm.append(res[6])
     tnorm.append(res[7])
     nno.append(res[8])
-    zno.append(res[9])
-    bno.append(res[10])
+    bno.append(res[9])
+    zno.append(res[10])
+
 
 # CV plot
 fs=15
@@ -1060,20 +1065,26 @@ plt.legend()
 plt.show()
 
 
-# m, b, z plots
-fs=15
-lw=1
-plt.subplot(3,1,1)
-plt.scatter(range(len(res[8])), res[8], linewidth=lw, label='Negative feedback') #n
-plt.subplot(3,1,2)
-plt.scatter(range(len(res[9])), res[9], linewidth=lw, label='Positive feedback') #b
-plt.subplot(3,1,3)
-plt.scatter(range(len(res[10])), res[10], linewidth=lw, label='No feedback') #z
-plt.tick_params(axis='both', labelsize=fs)
-plt.ylabel('mean firing rate', fontsize=fs)
-plt.xlabel('Input frequency (Hz)', fontsize=fs)
-plt.legend()
-plt.show()
+def plot3(n,b,z):
+    # m, b, z plots
+    fs=15
+    lw=1
+    plt.subplot(3,1,1)
+    plt.scatter(range(len(n)), n, linewidth=lw) #n
+    plt.legend()
+    plt.subplot(3,1,2)
+    plt.scatter(range(len(b)), b, linewidth=lw) #b
+    plt.legend()
+    plt.subplot(3,1,3)
+    plt.scatter(range(len(z)), z, linewidth=lw) #z
+    plt.tick_params(axis='both', labelsize=fs)
+    plt.ylabel('mean firing rate', fontsize=fs)
+    plt.xlabel('Input frequency (Hz)', fontsize=fs)
+    plt.legend()
+    plt.show()
+    
+    
+plot3(npos, bp, zp)
 
 
 #%% Plot v vs f with feedback in pr
@@ -1105,6 +1116,7 @@ def simprv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, r
         zlist=[]
         prelist=[]
         postlist=[]
+        blist=[]
         tcurr = 0
         ratio = 0
         timer = delta_t
@@ -1122,7 +1134,7 @@ def simprv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, r
                     b = binomial(n, pr(z, xb, rate1))
                 else:
                     b = binomial(n, pr)
-
+                blist.append(b)
                 n-=b
                 z=z+cz*b
                 tmin = t0
@@ -1154,19 +1166,20 @@ def simprv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, r
                     
             v=v+(-v/tauv+kz*z)*tmin
             tcurr += tmin
-        nav.append(nlist)
-        zav.append(zlist)
         tdiffs=np.diff(postlist)
         tav.append(np.mean(tdiffs))
         cv2av.append(np.var(tdiffs)/np.mean(tdiffs)**2)
+        nav.append(np.mean(nlist))
+        zav.append(np.mean(zlist))
+        bav.append(np.mean(blist))
     cv2av=np.mean(cv2av)
     tav=np.mean(tav)
-    bav=np.mean(bav)
-    bav=np.mean(trim_to_smallest(nav), axis=0)
-    nav=np.mean(trim_to_smallest(nav), axis=0)
-    zav=np.mean(trim_to_smallest(zav), axis=0)
+    bav=np.mean(blist)
+    nav=np.mean(nav)
+    zav=np.mean(zav)
     
     return tlist, nlist, zlist, vlist, prelist, postlist, cv2av, tav, nav, bav, zav
+
 
 def trim_to_smallest(lists):
     if not lists:  # handle empty input
@@ -1223,50 +1236,54 @@ nfvals=20
 flist=np.linspace(1,fmax,nfvals)
 ffpos=[]
 tpos=[]
-np=[]
-zp=[]
+npos=[]
 bp=[]
+zp=[]
+
 for i, f in enumerate(flist):
     print(i, len(flist))
     res=simprv(f, xfunpos, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xbp, xmaxp, rate1p)
     ffpos.append(res[6])
     tpos.append(res[7])
-    np.append(res[8])
-    zp.append(res[9])
-    bp.append(res[10])
-
+    npos.append(res[8])
+    bp.append(res[9])
+    zp.append(res[10])
 
 # Negative
 flist=np.linspace(1,fmax,nfvals)
 ffneg=[]
 tneg=[]
 nn=[]
-zn=[]
 bn=[]
+zn=[]
+
 for i, f in enumerate(flist):
     print(i, len(flist))
     res=simprv(f, xfunneg, M, k , tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xbn, xmaxn, rate1n)
     ffneg.append(res[6])
     tneg.append(res[7])
     nn.append(res[8])
-    zn.append(res[9])
-    bn.append(res[10])
+    bn.append(res[9])
+    zn.append(res[10])
+
 
 # No feedback
 flist=np.linspace(1,fmax,nfvals)
 ffnorm=[]
 tnorm=[]
 nno=[]
-zno=[]
 bno=[]
+zno=[]
+
 for i, f in enumerate(flist):
     print(i, len(flist))
     res=simprv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
     ffnorm.append(res[6])
     tnorm.append(res[7])
     nno.append(res[8])
-    zno.append(res[9])
-    bno.append(res[10])
+    bno.append(res[9])
+    zno.append(res[10])
+
 
 # CV plot
 fs=15
