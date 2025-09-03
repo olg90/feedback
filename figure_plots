@@ -2,11 +2,227 @@
 import numpy as np
 from matplotlib.pyplot import plot as pt
 import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial
+
+def xfunpos(z, xb, xmax, rate1):
+    return xb+(xmax-xb)*rate1*z/(1+rate1*z)
+
+def xfunneg(z, xmax, rate1):
+    return xmax/(1+rate1*z)
+
+def sim(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, ptype, ftype,
+        xfunpos, xfunneg, xbprp, xmaxprp, rate1prp, xbprn, 
+        rate1prn, xbkp, xmaxkp, rate1kp, xbkn, rate1kn, navgs):
+    
+    ffzlist=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        tlist=[]
+        zlist=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            if ptype=='k':
+                if ftype=='p':
+                    t1=exponential(1/(xfunpos(z, xbkp, xmaxkp, rate1kp)*(M-n) + 1e-6)) # site gets occupied
+                if ftype=='n':
+                    t1=exponential(1/(xfunneg(z, xbkn, rate1kn)*(M-n) + 1e-6)) # site gets occupied
+            else:
+                t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+                if ptype=='pr':
+                    if ftype=='p':
+                        b = binomial(n, xfunpos(z, xbprp, xmaxprp, rate1prp))
+                    if ftype=='n':
+                        b = binomial(n, xfunneg(z, xbprn, rate1prn))
+                else:
+                    b = binomial(n, pr)
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    tlist.append(tcurr)
+                    zlist.append(z)
+            tcurr += tmin
+            
+        ffz=np.var(zlist)/np.mean(zlist)
+        ffzlist.append(ffz)
+    ffzav=np.mean(ffzlist)
+    return ffzav
+
+f=10
+pr=0.2
+k=10
+M=100
+tauv=0.5
+vth=0.2
+kz=0.02
+cz=100
+gz=50
+k=10
+
+# k positive
+xbkp=10
+xmaxkp=100
+rate1kp=10
+
+# k negative
+xbkn=10
+rate1kn=10
+
+# pr positive
+xbprp=0.4
+xmaxprp=1
+rate1prp=10
+
+# pr negative
+xbprn=0.4
+rate1prn=10
+
+delta_t=0.001
+tmax=20
+navgs=1
+
+ptype='k' # pr or k
+ftype='p' # p positive n negative
+    
+flist=np.linspace(0,100,20)
+
+ffz=[]
+for i,f in enumerate(flist):
+    print(i, len(flist))
+    ffzav=sim(f, pr, M, k, tauv, vth, tmax, delta_t, 
+              cz, gz, kz, ptype, ftype, xfunpos, xfunneg, xbprp, 
+              xmaxprp, rate1prp, xbprn, rate1prn, xbkp, xmaxkp, 
+              rate1kp, xbkn, rate1kn, navgs)
+    ffz.append(ffzav)
+
+plt.plot(flist, ffz)
+plt.ylabel('ffz')
+plt.xlabel('input frequency')
+plt.show()
+
+#%%
+import numpy as np
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial
+from scipy.optimize import least_squares
+
+# ---------- Helper functions ----------
+def xfunpos(z, xb, xmax, rate1):
+    return xb + (xmax - xb) * rate1 * z / (1 + rate1 * z)
+
+def xfunneg(z, xmax, rate1):
+    return xmax / (1 + rate1 * z)
+
+def sim(f, pr, M, k, tauv, vth, tmax, delta_t,
+        cz, gz, kz, navgs, ftype,
+        xfunpos, xfunneg,
+        xbprp, xmaxprp, rate1prp, xbprn, rate1prn,
+        xbkp, xmaxkp, rate1kp, xbkn, rate1kn):
+    """
+    Run one stochastic simulation and return mean n, mean z
+    """
+    n_acc = []
+    z_acc = []
+    for _ in range(navgs):
+        n = 0
+        z = 0
+        v = 0
+        tcurr = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0 = exponential(1/f)  # action potential
+            if ftype == 'p':
+                t1 = exponential(1/(xfunpos(z, xbkp, xmaxkp, rate1kp)*(M-n)+1e-6))
+            else:
+                t1 = exponential(1/(xfunneg(z, xbkn, rate1kn)*(M-n)+1e-6))
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+
+            if t0 < t1 and t0 < t2 and t0 < t3:  # AP occurs
+                b = binomial(n, pr)
+                n -= b
+                z += cz * b
+                tmin = t0
+                timer -= tmin
+            elif t1 < t0 and t1 < t2 and t1 < t3:  # docking
+                n += 1
+                tmin = t1
+                timer -= tmin
+            elif t2 < t0 and t2 < t1 and t2 < t3:  # z decay
+                z -= 1
+                tmin = t2
+                timer -= tmin
+            else:  # sampling
+                tmin = t3
+                timer = delta_t
+                n_acc.append(n)
+                z_acc.append(z)
+
+            v = v + (-v/tauv + kz*z)*tmin
+            tcurr += tmin
+    return np.mean(n_acc), np.mean(z_acc)
+
+# ---------- Parameters ----------
+pr = 0.2
+k_init = 10
+M = 100
+tauv = 0.5
+vth = 0.2
+kz = 0.02
+gz = 50
+cz = 10
+
+xbkp = 10
+xmaxkp = 100
+rate1kp = 10
+xbkn = 10
+rate1kn = 10
+xbprp = 0.2
+xmaxprp = 1
+rate1prp = 10
+xbprn = 0.2
+rate1prn = 10
+
+delta_t = 0.001
+tmax = 20
+navgs = 10   # increased for stable zmean
+ftype = 'p'
+
+flist = np.arange(10, 110, 10)  # 10,20,...,100 Hz
+
+res=sim(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, ftype, xfunpos, xfunneg, xbprp, xmaxprp, rate1prp, xbprn, rate1prn, xbkp, xmaxkp, rate1kp, xbkn, rate1kn)
+
+
+
+#%% old stuff
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
 from numpy.random import exponential, binomial, gamma
 from numpy import exp
 from numpy import sqrt as Sqrt
 from numpy import log as Log
-
 def simk(f, pr, M, k, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
     FFnlist=[]
     FFzlist=[]
@@ -192,191 +408,1308 @@ def simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, ra
     tav=np.mean(tmean)
     return tlist, nlist, zlist, vlist, prelist, postlist, tav
 
+def simkvpr(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1):
+    tav =[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        v=0
+        tlist=[]
+        vlist=[]
+        nlist=[]
+        zlist=[]
+        prelist=[]
+        postlist=[]
+        tmean=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            if k==xfunpos:
+                t1=exponential(1/(k(z, xb, xmax, rate1)*(M-n) + 1e-6)) # site gets occupied
+            if k==xfunneg:
+                t1=exponential(1/(k(z,xmax, rate1)*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+            
+                b = binomial(n, pr)
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    tlist.append(tcurr)
+                    # nlist.append(n)
+                    # zlist.append(z)
+                    vlist.append(v)
+                    
+            if v>vth:
+                postlist.append(tcurr)
+                v=0
+                    
+            v=v+(-v/tauv+kz*z)*tmin
+            tcurr += tmin
+        tmean.append(np.mean(np.diff(postlist)))
+    tav=np.mean(tmean)
+    return tlist, nlist, zlist, vlist, prelist, postlist, tav
+
 f=10
-pr=xfunpos
-# pr=xfunneg
-k=10
 M=100
+pr=0.2
 tauv=0.5
 vth=0.2
 kz=0.02
 gz=50
 cz=10
-if pr==xfunpos:
-    xb=0.1
-    xmax=0.6
-    rate1=10
-if pr==xfunneg:
-    xmax=0.6
-    rate1=10
+
+# negative
+xbn=None
+xmaxn=10
+rate1n=3
+
+# positive
+xbp=10
+xmaxp=100
+rate1p=3
+
+# none
+xb=xbp
+xmax=xbp
+rate1=rate1p
 
 delta_t=0.001
 tmax=20
+navgs=10
+
+res=simkv(f, xfunneg, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+fig, ax = plt.subplots(3,1)
+ax[0].plot(res[0], res[1]); ax[0].set_ylabel('n')
+ax[1].plot(res[0], res[2]); ax[1].set_ylabel('z')
+ax[2].plot(res[0], res[3]); ax[2].set_ylabel('v')
+ax[2].plot(res[0], vth*np.ones(len(res[0])), color='k')
+for x in res[5]:
+    plt.axvline(x, color='r', alpha=0.3)
+print(1/res[6])
+plt.show()
+
+#%%
+
+
+
+def simk(f, pr, M, k, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
+    FFzlist=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        zlist=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+            
+                if pr==xfunpos:
+                    b = binomial(n, pr(z, xb, xmax, rate1))
+                if pr==xfunneg:
+                    b = binomial(n, pr(z, xmax, rate1))
+                else:
+                    b = binomial(n, pr)
+                    
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    nlist.append(n)
+                    zlist.append(z)
+                    tlist.append(tcurr)
+    
+            tcurr += tmin
+    
+        FFn=np.var(nlist)/np.mean(nlist)
+        FFz=np.var(zlist)/np.mean(zlist)
+        FFnlist.append(FFn)
+        FFzlist.append(FFz)
+    FFn = np.mean(FFnlist)
+    FFz = np.mean(FFzlist)
+
+    return tlist, nlist, zlist, prelist, postlist, FFn, FFz
+
+t, n, z, pre, post, FFn, FFz = simk(f, pr, M, k, tmax, 
+                                       delta_t, cz, gz, navgs, xb, xmax, rate1)
+# =============================================================================
+# pre = [x for x in pre if x>0.3*tmax]
+# post = [x for x in post if x>0.3*tmax]
+# =============================================================================
+
+f=10
+M=100
+pr=0.2
+tauv=0.5
+vth=0.2
+kz=0.02
+gz=50
+cz=10
+
+# negative
+xbn=None
+xmaxn=10
+rate1n=3
+
+# positive
+xbp=10
+xmaxp=100
+rate1p=3
+
+# none
+xb=xbp
+xmax=xbp
+rate1=rate1p
+
+delta_t=0.001
+tmax=1
 navgs=1
 
+
+fs=20
+plt.subplot(2,1,1)
+plt.plot(t,n, color='#ff7f0e', linewidth=3)
+plt.ylabel('# of docked\nsynaptic\nvesicles', fontsize=fs)
 # =============================================================================
-# res=simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
-# fig, ax = plt.subplots(3,1)
-# ax[0].plot(res[0], res[1]); ax[0].set_ylabel('n')
-# ax[1].plot(res[0], res[2]); ax[1].set_ylabel('z')
-# ax[2].plot(res[0], res[3]); ax[2].set_ylabel('v')
-# ax[2].plot(res[0], vth*np.ones(len(res[0])), color='k')
-# for x in res[5]:
-#     plt.axvline(x, color='r', alpha=0.3)
-# print(1/res[6])
-# plt.show()
-# #%%
+# for x in pre:
+#     plt.axvline(x, color='blue', alpha=0.3)
 # =============================================================================
+plt.xticks([])
+plt.text(0.313, 100, r'Presynaptic action potential', fontsize=fs)
+plt.text(0.637, 100, r'$\downarrow$', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.subplot(2,1,2)
+plt.plot(t,z, color='#2ca02c', linewidth=3)
+plt.ylabel('# of neuro-\ntransmitters', fontsize=fs)
+plt.tick_params(axis='both', labelsize=fs)
+
+plt.subplots_adjust(top=0.926,
+bottom=0.135,
+left=0.171,
+right=0.973,
+hspace=0.249,
+wspace=0.2)
+
+plt.show()
+
+#%%
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial
+
+def xfunpos(z, xb, xmax, rate1):
+    return xb+(xmax-xb)*rate1*z/(1+rate1*z)
+
+def xfunneg(z, xmax, rate1):
+    return xmax/(1+rate1*z)
+
+
+def simk(f, pr, M, k, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
+    FFzlist=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        zlist=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+            
+                if pr==xfunpos:
+                    b = binomial(n, pr(z, xb, xmax, rate1))
+                elif pr==xfunneg:
+                    b = binomial(n, pr(z, xb, rate1))
+                else:
+                    b = binomial(n, pr)
+                    
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    zlist.append(z)
+            tcurr += tmin
+    
+        FFz=np.var(zlist)/np.mean(zlist)
+        FFzlist.append(FFz)
+    FFz = np.mean(FFzlist)
+
+    return FFz
+
+def simpr(f, pr, M, k, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
+    FFzlist=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        zlist=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            if k == xfunpos:
+                t1=exponential(1/(xfunpos(xb,xmax,rate1)*(M-n) + 1e-6)) # site gets occupied
+            if k == xfunneg:
+                t1=exponential(1/(xfunneg(xb,rate1)*(M-n) + 1e-6)) # site gets occupied
+                
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+                b = binomial(n, pr)
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    zlist.append(z)
+            tcurr += tmin
+    
+        FFz=np.var(zlist)/np.mean(zlist)
+        FFzlist.append(FFz)
+    FFz = np.mean(FFzlist)
+
+    return FFz
+
+
+f=10
+M=100
+# pr=xfunpos
+pr=xfunneg
+tauv=0.5
+vth=0.2
+kz=0.02
+gz=50
+cz=10
+
+# 
+xb=0.4
+xmax=1
+rate1=1
+
+
+# Plot FFn FFz vs f or pr or k
+xlist=np.linspace(1,200,20)
+ffzlistk=[]
+klist=[10,20,30,50,100]
+for j, k in enumerate(klist):
+    FFzlist=np.zeros_like(xlist)
+    for i,x in enumerate(xlist):
+        print(j, len(klist), i, len(xlist))
+        f=x
+        FFz =simk(f, pr, M, k, tmax, delta_t, cz, gz, navgs,
+                 xb, xmax, rate1)
+        FFzlist[i]=FFz
+    ffzlistk.append(FFzlist)
+
+# plt.subplot(2,1,1)
+fs=20
+ms=['o', 'x', 's', '^', 'v']
+for i,ffz in enumerate(ffzlistk):
+    plt.plot(xlist, ffz, label='k={}'.format(klist[i]))# marker=ms[i])
+plt.ylabel('Fano factor of the\n# of neurotransmitters', fontsize=fs)
+# plt.xticks([])
+# plt.subplot(2,1,2) 
+# plt.plot(xlist, FFzlist)
+# plt.ylabel('FFz')
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.legend(fontsize=fs-7)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
 
 # =============================================================================
+# # Output frequency
+# 
 # # Negative
 # flist=np.linspace(1,100,100)
 # foutneg=[]
 # for i, f in enumerate(flist):
 #     print(i, len(flist))
-#     res=simkv(f, xfunneg, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+#     res=simkv(f, xfunneg, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xbn, xmaxn, rate1n)
 #     foutneg.append(1/res[6])
 #     
-# # Feedback
+# # Positive
 # flist=np.linspace(1,100,100)
 # foutpos=[]
 # for i, f in enumerate(flist):
 #     print(i, len(flist))
-#     res=simkv(f, xfunpos, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+#     res=simkv(f, xfunpos, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xbp, xmaxp, rate1p)
 #     foutpos.append(1/res[6])
-# =============================================================================
-
-# No feedback
-flist=np.linspace(1,100,100)
-foutnorm=[]
-prnone=xmax
-for i, f in enumerate(flist):
-    print(i, len(flist))
-    res=simkv(f, xfunpos, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, prnone, prnone, rate1)
-    foutnorm.append(1/res[6])
-    
-    
-# =============================================================================
-# np.save('neg', foutneg)
-# np.save('pos', foutpos)
-# np.save('none', foutnorm)
-# =============================================================================
-
-# =============================================================================
-# import os
-# os.chdir(r'C:\Users\ogamb\OneDrive\Desktop\Research\Feedback')
 # 
-# foutneg=np.load('neg.npy')
-# foutpos=np.load('pos.npy')
-# foutnorm=np.load('none.npy')
-# =============================================================================
-    
-fs=15
-plt.title('Negative feedback', fontsize=fs)
-plt.plot(flist, foutneg, linewidth=5, label='Negative feedback')
-plt.plot(flist, foutpos, linewidth=5, label='Positive feedback')
-plt.plot(flist, foutnorm, linewidth=5, label='No feedback')
-plt.tick_params(axis='both', labelsize=fs)
-plt.ylabel('Mean postsynaptic firing rate (Hz)', fontsize=fs)
-plt.xlabel('Input frequency (Hz)', fontsize=fs)
-plt.legend()
-plt.show()
-
-# =============================================================================
-# def moving_average(x, w):
-#     return np.convolve(x, np.ones(w)/w, mode='valid')
-# 
-# window = 10
-# fs = 15
-# 
-# # Smooth each output with moving average
-# foutneg_smooth = moving_average(foutneg, window)
-# foutpos_smooth = moving_average(foutpos, window)
-# foutnorm_smooth = moving_average(foutnorm, window)
-# 
-# # Adjust x-axis (flist) since smoothing shortens the array
-# flist_smooth = flist[window-1:]
-# 
+# # No feedback
+# flist=np.linspace(1,100,100)
+# foutnorm=[]
+# for i, f in enumerate(flist):
+#     print(i, len(flist))
+#     res=simkv(f, xfunpos, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+#     foutnorm.append(1/res[6])
+#     
+# fs=15
 # plt.title('Negative feedback', fontsize=fs)
-# plt.plot(flist_smooth, foutneg_smooth, linewidth=5, label='Negative feedback')
-# plt.plot(flist_smooth, foutpos_smooth, linewidth=5, label='Positive feedback')
-# plt.plot(flist_smooth, foutnorm_smooth, linewidth=5, label='No feedback')
+# plt.plot(flist, foutneg, linewidth=5, label='Negative feedback')
+# plt.plot(flist, foutpos, linewidth=5, label='Positive feedback')
+# plt.plot(flist, foutnorm, linewidth=5, label='No feedback')
 # plt.tick_params(axis='both', labelsize=fs)
 # plt.ylabel('Mean postsynaptic firing rate (Hz)', fontsize=fs)
 # plt.xlabel('Input frequency (Hz)', fontsize=fs)
 # plt.legend()
-# plt.xlim([])
 # plt.show()
-# 
 # =============================================================================
+              
+
+#%% Plot v vs f with feedback in k
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial
+
+def xfunpos(z, xb, xmax, rate1):
+    return xb+(xmax-xb)*rate1*z/(1+rate1*z)
+
+def xfunneg(z, xmax, rate1):
+    return xmax/(1+rate1*z)
+
+def simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1):
+    cvav =[]
+    tav=[]
+    nav=[]
+    zav=[]
+    bav=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        v=0
+        tlist=[]
+        vlist=[]
+        nlist=[]
+        zlist=[]
+        blist=[]
+        prelist=[]
+        postlist=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            if k==xfunpos:
+                t1=exponential(1/(k(z, xb, xmax, rate1)*(M-n) + 1e-6)) # site gets occupied
+            elif k==xfunneg:
+                t1=exponential(1/(k(z,xb, rate1)*(M-n) + 1e-6)) # site gets occupied
+            else:
+                t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+            
+                b = binomial(n, pr)
+                blist.append(b)
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    tlist.append(tcurr)
+                    nlist.append(n)
+                    zlist.append(z)
+                    vlist.append(v)
+                    
+            if v>vth:
+                postlist.append(tcurr)
+                v=0
+                    
+            v=v+(-v/tauv+kz*z)*tmin
+            tcurr += tmin
+            
+        nav.append(nlist)
+        zav.append(zlist)
+        print(postlist)
+        print(np.diff(postlist))
+        tdiffs=np.diff(postlist)
+        tav.append(np.mean(tdiffs))
+        cvav.append(np.var(tdiffs)/np.mean(tdiffs)**2)
+        bav.append(blist)
+    cvav=np.mean(cvav)
+    tav=np.mean(tav)
+    bav=np.mean(trim_to_smallest(bav), axis=0)
+    nav=np.mean(trim_to_smallest(nav), axis=0)
+    zav=np.mean(trim_to_smallest(zav), axis=0)
+    
+    return tlist, nlist, zlist, vlist, prelist, postlist, cvav, tav, nav, zav, bav
+
+def trim_to_smallest(lists):
+    if not lists:  # handle empty input
+        return []
+    # find the smallest length
+    min_len = min(len(sub) for sub in lists)
+    # trim each list to that length
+    return [sub[:min_len] for sub in lists]
+
+
+M=100
+pr=0.5
+gz=100
+cz=50
+k=10
+
+tauv=0.1
+vth=0.04
+kz=0.002
+
+# positive - k
+xbp=7
+xmaxp=25
+rate1p=0.001
+
+# negative
+xbn=178
+xmaxn=None
+rate1n=3
+
+# none
+xb=xbp
+xmax=xbp
+rate1=rate1p
+
+delta_t=0.01
+tmax=20
+navgs=50
+
+fmax=40
+nfvals=20
 
 # =============================================================================
-# t, n, z, pre, post, FFn, FFz = simk(f, pr, M, k, tmax, 
-#                                        delta_t, cz, gz, navgs, xb, xmax, rate1)
-# # =============================================================================
-# # pre = [x for x in pre if x>0.3*tmax]
-# # post = [x for x in post if x>0.3*tmax]
-# # =============================================================================
-# 
-# fs=20
-# plt.subplot(2,1,1)
-# plt.plot(t,n, color='#ff7f0e', linewidth=3)
-# plt.ylabel('# of docked\nsynaptic\nvesicles', fontsize=fs)
-# # =============================================================================
-# # for x in pre:
-# #     plt.axvline(x, color='blue', alpha=0.3)
-# # =============================================================================
-# plt.xticks([])
-# plt.text(0.313, 100, r'Presynaptic action potential', fontsize=fs)
-# plt.text(0.637, 100, r'$\downarrow$', fontsize=fs)
-# plt.tick_params(axis='both', labelsize=fs)
-# 
-# plt.subplot(2,1,2)
-# plt.plot(t,z, color='#2ca02c', linewidth=3)
-# plt.ylabel('# of neuro-\ntransmitters', fontsize=fs)
-# plt.tick_params(axis='both', labelsize=fs)
-# 
-# 
-# plt.subplots_adjust(top=0.926,
-# bottom=0.135,
-# left=0.171,
-# right=0.973,
-# hspace=0.249,
-# wspace=0.2)
-# 
+# f=100
+# res=simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+# plt.scatter(range(len(res[10])), res[10]) # 3-v, 8-n, 9-z, 10-b
 # plt.show()
-# #%%
+# print(1/res[7])
+# #%% part 2
 # =============================================================================
 
+# Positive
+flist=np.linspace(1,fmax,nfvals)
+ffpos=[]
+tpos=[]
+npos=[]
+zp=[]
+bp=[]
+for i, f in enumerate(flist):
+    print(i, len(flist))
+    res=simkv(f, pr, M, xfunpos, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xbp, xmaxp, rate1p)
+    ffpos.append(res[6])
+    tpos.append(res[7])
+    npos.append(res[8])
+    zp.append(res[9])
+    bp.append(res[10])
+
+# Negative
+flist=np.linspace(1,fmax,nfvals)
+ffneg=[]
+tneg=[]
+nn=[]
+zn=[]
+bn=[]
+for i, f in enumerate(flist):
+    print(i, len(flist))
+    res=simkv(f, pr, M, xfunneg, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xbn, xmaxn, rate1n)
+    ffneg.append(res[6])
+    tneg.append(res[7])
+    nn.append(res[8])
+    zn.append(res[9])
+    bn.append(res[10])
+
+# No feedback
+flist=np.linspace(1,fmax,nfvals)
+ffnorm=[]
+tnorm=[]
+nno=[]
+zno=[]
+bno=[]
+for i, f in enumerate(flist):
+    print(i, len(flist))
+    res=simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+    ffnorm.append(res[6])
+    tnorm.append(res[7])
+    nno.append(res[8])
+    zno.append(res[9])
+    bno.append(res[10])
+
+# CV plot
+fs=15
+lw=1
+plt.title('Negative feedback', fontsize=fs)
+plt.plot(flist, ffneg, linewidth=lw, label='Negative feedback')
+plt.plot(flist, ffpos, linewidth=lw, label='Positive feedback')
+plt.plot(flist, ffnorm, linewidth=lw, label='No feedback')
+plt.tick_params(axis='both', labelsize=fs)
+plt.ylabel('CV of the firing rate noise', fontsize=fs)
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.legend()
+plt.show()
+
+# firing time plot
+fs=15
+lw=1
+plt.title('Negative feedback', fontsize=fs)
+plt.plot(flist, 1/np.array(tneg), linewidth=lw, label='Negative feedback')
+plt.plot(flist, 1/np.array(tpos), linewidth=lw, label='Positive feedback')
+plt.plot(flist, 1/np.array(tnorm), linewidth=lw, label='No feedback')
+plt.tick_params(axis='both', labelsize=fs)
+plt.ylabel('mean firing rate', fontsize=fs)
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.plot(flist,flist)
+plt.ylim([0, np.max(1/np.array(tpos))])
+plt.legend()
+plt.show()
+
+
+# m, b, z plots
+fs=15
+lw=1
+plt.subplot(3,1,1)
+plt.scatter(range(len(res[8])), res[8], linewidth=lw, label='Negative feedback') #n
+plt.subplot(3,1,2)
+plt.scatter(range(len(res[9])), res[9], linewidth=lw, label='Positive feedback') #b
+plt.subplot(3,1,3)
+plt.scatter(range(len(res[10])), res[10], linewidth=lw, label='No feedback') #z
+plt.tick_params(axis='both', labelsize=fs)
+plt.ylabel('mean firing rate', fontsize=fs)
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.legend()
+plt.show()
+
+
+#%% Plot v vs f with feedback in pr
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial
+
+def xfunpos(z, xb, xmax, rate1):
+    return xb+(xmax-xb)*rate1*z/(1+rate1*z)
+
+def xfunneg(z, xmax, rate1):
+    return xmax/(1+rate1*z)
+
+def simprv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1):
+    cv2av =[]
+    tav=[]
+    bav=[]
+    nav=[]
+    zav=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        v=0
+        tlist=[]
+        vlist=[]
+        nlist=[]
+        zlist=[]
+        prelist=[]
+        postlist=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+            
+                if pr==xfunpos:
+                    b = binomial(n, pr(z, xb, xmax, rate1))
+                elif pr==xfunneg:
+                    b = binomial(n, pr(z, xb, rate1))
+                else:
+                    b = binomial(n, pr)
+
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    tlist.append(tcurr)
+                    nlist.append(n)
+                    zlist.append(z)
+                    vlist.append(v)
+                    
+            if v>vth:
+                postlist.append(tcurr)
+                v=0
+                    
+            v=v+(-v/tauv+kz*z)*tmin
+            tcurr += tmin
+        nav.append(nlist)
+        zav.append(zlist)
+        tdiffs=np.diff(postlist)
+        tav.append(np.mean(tdiffs))
+        cv2av.append(np.var(tdiffs)/np.mean(tdiffs)**2)
+    cv2av=np.mean(cv2av)
+    tav=np.mean(tav)
+    bav=np.mean(bav)
+    bav=np.mean(trim_to_smallest(nav), axis=0)
+    nav=np.mean(trim_to_smallest(nav), axis=0)
+    zav=np.mean(trim_to_smallest(zav), axis=0)
+    
+    return tlist, nlist, zlist, vlist, prelist, postlist, cv2av, tav, nav, bav, zav
+
+def trim_to_smallest(lists):
+    if not lists:  # handle empty input
+        return []
+    # find the smallest length
+    min_len = min(len(sub) for sub in lists)
+    # trim each list to that length
+    return [sub[:min_len] for sub in lists]
+
+
+f=10
+M=100
+k=10
+gz=100
+cz=50
+pr=0.5
+
+tauv=0.1
+vth=0.04
+kz=0.002
+
+# positive - pr
+xbp=0.5
+xmaxp=1
+rate1p=0.001
+
+# negative
+xbn=0.5
+xmaxn=None
+rate1n=0.001
+
+# none
+xb=xbp
+xmax=xbp
+rate1=rate1p
+
+delta_t=0.01
+tmax=20
+navgs=1
+
+fmax=40
+nfvals=20
+
 # =============================================================================
-# # Plot FFn FFz vs f or pr or k
-# xlist=np.linspace(1,200,20)
-# ffnlistk=[]
-# klist=[10,20,30,50,100]
-# for j, k in enumerate(klist):
-#     FFnlist=np.zeros_like(xlist)
-#     for i,x in enumerate(xlist):
-#         print(j, len(klist), i, len(xlist))
-#         f=x
-#         tlist, nlist, zlist, prelist, postlist, FFn, FFz = \
-#             simk(f, pr, M, k, tmax, delta_t, cz, gz, navgs,
-#                  xb, xmax, rate1)
-#         FFnlist[i]=FFn
-#         # FFzlist[i]=FFz
-#     ffnlistk.append(FFnlist)
+# f=100
+# res=simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+# plt.scatter(range(len(res[10])), res[10]) # 3-v, 8-n, 9-z, 10-b
+# plt.show()
+# print(1/res[7])
+# #%% part 2
+# =============================================================================
+
+# Positive
+flist=np.linspace(1,fmax,nfvals)
+ffpos=[]
+tpos=[]
+np=[]
+zp=[]
+bp=[]
+for i, f in enumerate(flist):
+    print(i, len(flist))
+    res=simprv(f, xfunpos, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xbp, xmaxp, rate1p)
+    ffpos.append(res[6])
+    tpos.append(res[7])
+    np.append(res[8])
+    zp.append(res[9])
+    bp.append(res[10])
+
+
+# Negative
+flist=np.linspace(1,fmax,nfvals)
+ffneg=[]
+tneg=[]
+nn=[]
+zn=[]
+bn=[]
+for i, f in enumerate(flist):
+    print(i, len(flist))
+    res=simprv(f, xfunneg, M, k , tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xbn, xmaxn, rate1n)
+    ffneg.append(res[6])
+    tneg.append(res[7])
+    nn.append(res[8])
+    zn.append(res[9])
+    bn.append(res[10])
+
+# No feedback
+flist=np.linspace(1,fmax,nfvals)
+ffnorm=[]
+tnorm=[]
+nno=[]
+zno=[]
+bno=[]
+for i, f in enumerate(flist):
+    print(i, len(flist))
+    res=simprv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+    ffnorm.append(res[6])
+    tnorm.append(res[7])
+    nno.append(res[8])
+    zno.append(res[9])
+    bno.append(res[10])
+
+# CV plot
+fs=15
+lw=1
+plt.title('Negative feedback', fontsize=fs)
+plt.plot(flist, ffneg, linewidth=lw, label='Negative feedback')
+plt.plot(flist, ffpos, linewidth=lw, label='Positive feedback')
+plt.plot(flist, ffnorm, linewidth=lw, label='No feedback')
+plt.tick_params(axis='both', labelsize=fs)
+plt.ylabel('CV of the firing rate noise', fontsize=fs)
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.legend()
+plt.show()
+
+# firing time plot
+fs=15
+lw=1
+plt.title('Negative feedback', fontsize=fs)
+plt.plot(flist, 1/np.array(tneg), linewidth=lw, label='Negative feedback')
+plt.plot(flist, 1/np.array(tpos), linewidth=lw, label='Positive feedback')
+plt.plot(flist, 1/np.array(tnorm), linewidth=lw, label='No feedback')
+plt.tick_params(axis='both', labelsize=fs)
+plt.ylabel('mean firing rate', fontsize=fs)
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+# plt.plot(flist,flist)
+# plt.ylim([0, np.max(1/np.array(tpos))])
+plt.legend()
+plt.show()
+
+
+# m, b, z plots
+fs=15
+lw=1
+plt.subplot(3,1,1)
+plt.scatter(range(len(res[8])), res[8], linewidth=lw, label='Negative feedback') #n
+plt.subplot(3,1,2)
+plt.scatter(range(len(res[9])), res[9], linewidth=lw, label='Positive feedback') #b
+plt.subplot(3,1,3)
+plt.scatter(range(len(res[10])), res[10], linewidth=lw, label='No feedback') #z
+plt.tick_params(axis='both', labelsize=fs)
+plt.ylabel('mean firing rate', fontsize=fs)
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.legend()
+plt.show()
+
+
+
+# =============================================================================
 # 
-# # plt.subplot(2,1,1)
-# fs=20
-# ms=['o', 'x', 's', '^', 'v']
-# for i,ffn in enumerate(ffnlistk):
-#     plt.plot(xlist, ffn, label='k={}'.format(klist[i]))# marker=ms[i])
-# plt.ylabel('Fano factor of the\n# of docked SVs', fontsize=fs)
-# # plt.xticks([])
-# # plt.subplot(2,1,2) 
-# # plt.plot(xlist, FFzlist)
-# # plt.ylabel('FFz')
+# #%%  plot all together
+# fs = 15
+# lw = 1
+# 
+# fig, ax1 = plt.subplots()
+# 
+# # Left axis: ffpos
+# ax1.set_title('Feedback comparison', fontsize=fs)
+# line1, = ax1.plot(flist, ffpos, linewidth=lw, color='C2', label='Positive feedback')
+# ax1.set_xlabel('Input frequency (Hz)', fontsize=fs)
+# ax1.set_ylabel('Fano factor (positive feedback)', fontsize=fs, color='C2')
+# ax1.tick_params(axis='y', labelcolor='C2')
+# ax1.tick_params(axis='x', labelsize=fs)
+# 
+# # Right axis: ffneg and ffnorm
+# ax2 = ax1.twinx()
+# line2, = ax2.plot(flist, ffneg, linewidth=lw, color='C0', label='Negative feedback')
+# line3, = ax2.plot(flist, ffnorm, linewidth=lw, color='C1', label='No feedback')
+# ax2.set_ylabel('Fano factor (negative / no feedback)', fontsize=fs)
+# ax2.tick_params(axis='y', labelcolor='black')  # or pick one color if you prefer
+# 
+# # Combine legends from both axes
+# lines = [line1, line2, line3]
+# labels = [l.get_label() for l in lines]
+# ax1.legend(lines, labels, fontsize=fs, loc='best')
+# 
+# plt.show()
+# =============================================================================
+# =============================================================================
+# 
+# #%% log scale
+# import matplotlib.ticker as mticker
+# 
+# fs = 15
+# lw = 1
+# 
+# plt.figure()
+# 
+# plt.title('Feedback in the fusion probability', fontsize=fs)
+# plt.plot(flist, ffneg, linewidth=lw, label='Negative feedback')
+# plt.plot(flist, ffpos, linewidth=lw, label='Positive feedback')
+# plt.plot(flist, ffnorm, linewidth=lw, label='No feedback')
+# 
+# plt.tick_params(axis='both', labelsize=fs)
+# plt.ylabel('Coefficient of variation (log scale)', fontsize=fs)
 # plt.xlabel('Input frequency (Hz)', fontsize=fs)
-# plt.legend(fontsize=fs-7)
-# plt.tick_params(axis='both', labelsize=fs)
-# plt.show()                      
+# 
+# plt.yscale('log')
+# 
+# # Force integer ticks
+# ax = plt.gca()
+# ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda y, _: f"{int(y)}" if y.is_integer() else ""))
+# 
+# plt.legend(fontsize=fs)
+# plt.show()
+# 
 # =============================================================================
+
+#%%  Get FFz vs f for feedback in pr and varying k
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial
+
+def xfunpos(z, xb, xmax, rate1):
+    return xb+(xmax-xb)*rate1*z/(1+rate1*z)
+
+def xfunneg(z, xmax, rate1):
+    return xmax/(1+rate1*z)
+
+
+def simk(f, pr, M, k, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
+    FFzlist=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        zlist=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0<t1 and t0<t2 and t0<t3: # AP occurrs
+            
+                if pr==xfunpos:
+                    b = binomial(n, pr(z, xb, xmax, rate1))
+                elif pr==xfunneg:
+                    b = binomial(n, pr(z, xb, rate1))
+                    
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    zlist.append(z)
+            tcurr += tmin
+    
+        FFz=np.var(zlist)/np.mean(zlist)
+        FFzlist.append(FFz)
+    FFz = np.mean(FFzlist)
+
+    return FFz
+
+f=10
+M=100
+# pr=xfunpos
+pr=xfunneg
+gz=50
+cz=10
+
+xb=0.4
+xmax=0.6
+rate1=1
+
+delta_t=0.01
+tmax=20
+navgs=10
+
+xlist=np.linspace(1,100,10)
+ffzlistk=[]
+klist=[10,20,30,50,100]
+for j, k in enumerate(klist):
+    FFzlist=np.zeros_like(xlist)
+    for i,x in enumerate(xlist):
+        print(j, len(klist), i, len(xlist))
+        f=x
+        FFz = simk(f, pr, M, k, tmax, delta_t, cz, gz, navgs,
+                 xb, xmax, rate1)
+        FFzlist[i]=FFz
+    ffzlistk.append(FFzlist)
+
+fs=20
+ms=['o', 'x', 's', '^', 'v']
+for i,ffz in enumerate(ffzlistk):
+    plt.plot(xlist, ffz, label='k={}'.format(klist[i]))# marker=ms[i])
+plt.ylabel('Fano factor of the\n# of neurotransmitters', fontsize=fs)
+# plt.xticks([])
+# plt.subplot(2,1,2) 
+# plt.plot(xlist, FFzlist)
+# plt.ylabel('FFz')
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.legend(fontsize=fs-7)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% Get FFz vs f for feedback in k and varying pr
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial
+
+def xfunpos(z, xb, xmax, rate1):
+    return xb+(xmax-xb)*rate1*z/(1+rate1*z)
+
+def xfunneg(z, xmax, rate1):
+    return xmax/(1+rate1*z)
+
+def simpr(f, pr, M, k, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1):
+    FFzlist=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        zlist=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            if k == xfunpos:
+                t1=exponential(1/(xfunpos(z, xb,xmax,rate1)*(M-n) + 1e-6)) # site gets occupied
+            if k == xfunneg:
+                t1=exponential(1/(xfunneg(z,xb,rate1)*(M-n) + 1e-6)) # site gets occupied
+                
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+                b = binomial(n, pr)
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    zlist.append(z)
+            tcurr += tmin
+    
+        FFz=np.var(zlist)/np.mean(zlist)
+        FFzlist.append(FFz)
+    FFz = np.mean(FFzlist)
+
+    return FFz
+
+
+f=10
+M=100
+pr=0.4
+gz=50
+cz=10
+# k=xfunpos
+k=xfunneg
+
+xb=10
+xmax=100
+rate1=10
+
+delta_t=0.01
+tmax=20
+navgs=10
+
+# Plot FFz vs f for (k) feedback
+xlist=np.linspace(1,100,10)
+ffzlistpr=[]
+prlist=[0.1, 0.2, 0.3, 0.5, 1]
+for j, pr in enumerate(prlist):
+    FFzlist=np.zeros_like(xlist)
+    for i,x in enumerate(xlist):
+        print(j, len(prlist), i, len(xlist))
+        f=x
+        FFz =simpr(f, pr, M, k, tmax, delta_t, cz, gz, navgs, xb, xmax, rate1)
+        FFzlist[i]=FFz
+    ffzlistpr.append(FFzlist)
+
+# plt.subplot(2,1,1)
+fs=20
+ms=['o', 'x', 's', '^', 'v']
+for i,ffz in enumerate(ffzlistpr):
+    plt.plot(xlist, ffz, label=f'$p_r={{}}$'.format(prlist[i]))# marker=ms[i])
+plt.ylabel('Fano factor of the\n# of neurotransmitters', fontsize=fs)
+# plt.xticks([])
+# plt.subplot(2,1,2) 
+# plt.plot(xlist, FFzlist)
+# plt.ylabel('FFz')
+plt.xlabel('Input frequency (Hz)', fontsize=fs)
+plt.legend(fontsize=fs-7)
+plt.tick_params(axis='both', labelsize=fs)
+plt.show()
+
+#%% vschem
+
+import numpy as np
+from matplotlib.pyplot import plot as pt
+import matplotlib.pyplot as plt
+from numpy.random import exponential, binomial
+
+def xfunpos(z, xb, xmax, rate1):
+    return xb+(xmax-xb)*rate1*z/(1+rate1*z)
+
+def xfunneg(z, xmax, rate1):
+    return xmax/(1+rate1*z)
+
+def simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1):
+    ffav =[]
+    tav=[]
+    for _ in range(navgs):
+        n=0
+        z=0
+        v=0
+        tlist=[]
+        vlist=[]
+        nlist=[]
+        zlist=[]
+        prelist=[]
+        postlist=[]
+        tcurr = 0
+        ratio = 0
+        timer = delta_t
+        while tcurr < tmax:
+            t0=exponential(1/f) # action potential
+            if k==xfunpos:
+                t1=exponential(1/(k(z, xb, xmax, rate1)*(M-n) + 1e-6)) # site gets occupied
+            elif k==xfunneg:
+                t1=exponential(1/(k(z,xb, rate1)*(M-n) + 1e-6)) # site gets occupied
+            else:
+                t1=exponential(1/(k*(M-n) + 1e-6)) # site gets occupied
+            
+            t2 = exponential(1/(gz*z + 1e-6))
+            t3 = timer
+    
+            if t0 < t1 and t0 < t2 and t0<t3: # AP occurrs
+            
+                b = binomial(n, pr)
+                n-=b
+                z=z+cz*b
+                tmin = t0
+                timer-=tmin
+                prelist.append(tcurr+tmin)
+    
+            elif t1<t0 and t1<t2 and t1<t3: # add a docked vesicle
+                n+=1
+                tmin = t1
+                timer-=tmin
+                
+            elif t2<t0 and t2<t1 and t2<t3:
+                z-=1
+                tmin=t2
+                timer-=tmin
+    
+            else:
+                tmin=t3
+                timer = delta_t
+                if tcurr >= ratio*tmax:
+                    tlist.append(tcurr)
+                    # nlist.append(n)
+                    # zlist.append(z)
+                    vlist.append(v)
+                    
+            if v>vth:
+                postlist.append(tcurr)
+                v=0
+                if len(vlist)>0:
+                    vlist[-1]=vth+0.001
+                    
+            v=v+(-v/tauv+kz*z)*tmin
+            tcurr += tmin
+            
+        tdiffs=np.diff(postlist)
+        tav.append(np.mean(tdiffs))
+        ffav.append(np.var(tdiffs)/np.mean(tdiffs)**2)
+    ffav=np.mean(ffav)
+    tav=np.mean(tav)
+    return tlist, nlist, zlist, vlist, prelist, postlist, ffav, tav
+
+M=20
+pr=0.6
+gz=100
+cz=10000
+k=10
+
+tauv=1
+vth=0.2
+kz=0.0003
+
+# positive
+xbp=10
+xmaxp=100
+rate1p=10
+
+# negative
+xbn=xbp
+xmaxn=None
+rate1n=rate1p
+
+# none
+xb=xbp
+xmax=xbp
+rate1=rate1p
+
+delta_t=0.001
+tmax=0.25
+navgs=1
+
+f=20
+
+res=simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
+tlist = res[0]
+vlist=res[3]
+#%%
+plt.plot(res[0], res[3])
+plt.plot(res[0], vth*np.ones(len(res[0])), color='k')
+for x in res[4]:
+    plt.axvline(x, color='b', alpha=0.3)
+for x in res[5]:
+    plt.axvline(x, color='r', alpha=0.3)
+plt.show()
