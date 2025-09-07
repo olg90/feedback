@@ -929,15 +929,29 @@ def simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, ra
     
     return tlist, nlist, zlist, vlist, prelist, postlist, cvav, tav, bav,  bcv
 
+# Analytical parameters
 M=100
-pr=0.4
+pr=0.5
 gz=100
-cz=10
+cz=100
 k=10
 
-tauv=0.5
+tauv=0.01
 vth=0.2
-kz=0.025
+kz=0.03
+
+# =============================================================================
+# # Simulations parameters
+# M=100
+# pr=0.4
+# gz=100
+# cz=10
+# k=10
+# 
+# tauv=0.5
+# vth=0.2
+# kz=0.025
+# =============================================================================
 
 # positive - k
 xbp=10
@@ -954,9 +968,9 @@ xb=xbp
 xmax=xbp
 rate1=rate1p
 
-delta_t=0.01
+delta_t=0.001
 tmax=20
-navgs=20
+navgs=1
 
 fmax=100
 nfvals=20
@@ -983,7 +997,7 @@ for i, f in enumerate(flist):
     tpos.append(res[7])
     bp.append(res[8])
     bcp.append(res[9])
-    
+
 
 # Negative
 flist=np.linspace(1,fmax,nfvals)
@@ -1063,7 +1077,6 @@ plt.ylabel('cv2b', fontsize=fs)
 plt.xlabel('Input frequency (Hz)', fontsize=fs)
 plt.legend()
 plt.show()
-
 
 # =============================================================================
 # def plot3(n,b,z):
@@ -1214,19 +1227,20 @@ nfvals=20
 
 f=20
 # res=simkv(f, xfunpos, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
-
-#%%
-plt.subplot(3,1,1)
-plt.step(res[0], res[1], where='post')
-plt.subplot(3,1,2)
-plt.step(res[0], res[2], where='post')
-plt.subplot(3,1,3)
-plt.plot(res[0], res[3])
-plt.plot(res[0], vth*np.ones(len(res[0])), color='k')
-for x in res[5]:
-    plt.axvline(x, color='r', alpha=0.3)
-plt.show()
-#%% part 2
+# =============================================================================
+# #%%
+# plt.subplot(3,1,1)
+# plt.step(res[0], res[1], where='post')
+# plt.subplot(3,1,2)
+# plt.step(res[0], res[2], where='post')
+# plt.subplot(3,1,3)
+# plt.plot(res[0], res[3])
+# plt.plot(res[0], vth*np.ones(len(res[0])), color='k')
+# for x in res[5]:
+#     plt.axvline(x, color='r', alpha=0.3)
+# plt.show()
+# #%% part 2
+# =============================================================================
 
 # Positive
 flist=np.linspace(1,fmax,nfvals)
