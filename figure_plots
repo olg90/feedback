@@ -938,7 +938,7 @@ k=10
 
 tauv=0.01
 vth=0.2
-kz=0.03
+kz=0.015
 
 # =============================================================================
 # # Simulations parameters
@@ -955,8 +955,8 @@ kz=0.03
 
 # positive - k
 xbp=10
-xmaxp=100
-rate1p=10
+xmaxp=20
+rate1p=0.001
 
 # negative
 xbn=xbp
@@ -970,7 +970,7 @@ rate1=rate1p
 
 delta_t=0.001
 tmax=20
-navgs=1
+navgs=20
 
 fmax=100
 nfvals=20
@@ -978,7 +978,7 @@ nfvals=20
 # =============================================================================
 # f=100
 # res=simkv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, rate1)
-# plt.scatter(range(len(res[10])), res[10]) # 3-v, 8-n, 9-z, 10-b
+# plt.plot(res[0], res[3])
 # plt.show()
 # print(1/res[7])
 # #%% part 2
@@ -1049,8 +1049,8 @@ plt.plot(flist, 1/np.array(tnorm), linewidth=lw, label='No feedback')
 plt.tick_params(axis='both', labelsize=fs)
 plt.ylabel('mean firing rate', fontsize=fs)
 plt.xlabel('Input frequency (Hz)', fontsize=fs)
-# plt.plot(flist,flist)
-# plt.ylim([0, np.max(1/np.array(tpos))])
+plt.plot(flist,flist)
+plt.ylim([0, np.max(1/np.array(tpos))])
 plt.legend()
 plt.show()
 
@@ -1195,18 +1195,18 @@ def simprv(f, pr, M, k, tauv, vth, tmax, delta_t, cz, gz, kz, navgs, xb, xmax, r
 f=10
 M=100
 k=10
-gz=50
-cz=10
-pr=0.4
+gz=100
+cz=100
+pr=0.5
 
-tauv=0.5
+tauv=0.01
 vth=0.2
-kz=0.025
+kz=0.015
 
 # positive - pr
-xbp=0.4
+xbp=0.5
 xmaxp=0.6
-rate1p=1
+rate1p=0.001
 
 # negative
 xbn=xbp
@@ -1242,7 +1242,7 @@ f=20
 # #%% part 2
 # =============================================================================
 
-# Positive
+# Positive 
 flist=np.linspace(1,fmax,nfvals)
 ffpos=[]
 tpos=[]
@@ -1287,8 +1287,7 @@ for i, f in enumerate(flist):
     bno.append(res[8])
     bcno.append(res[9])
 
-
-# CV plot
+# CV plot ------------------------------------ pr
 fs=15
 lw=1
 plt.plot(flist, ffneg, linewidth=lw, label='Negative feedback')
@@ -1309,8 +1308,8 @@ plt.plot(flist, 1/np.array(tnorm), linewidth=lw, label='No feedback')
 plt.tick_params(axis='both', labelsize=fs)
 plt.ylabel('mean firing rate', fontsize=fs)
 plt.xlabel('Input frequency (Hz)', fontsize=fs)
-# plt.plot(flist,flist)
-# plt.ylim([0, np.max(1/np.array(tpos))])
+plt.plot(flist,flist)
+plt.ylim([0, np.max(1/np.array(tpos))])
 plt.legend()
 plt.show()
 
